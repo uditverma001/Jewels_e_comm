@@ -21,12 +21,13 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "test": "vitest run",
+    "test": "pnpm db:test:setup && vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "pnpm db:test:setup && vitest run tests/integration",
     "test:e2e": "playwright test",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "db:test:setup": "node scripts/prepare-test-db.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

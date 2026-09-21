@@ -26,3 +26,8 @@ process.env.APP_URL ??= 'http://localhost:3000';
 process.env.PAYMENT_PROVIDER = 'fake';
 process.env.EMAIL_DRIVER = 'console';
 process.env.STORAGE_DRIVER = 'local';
+
+// Sessions, CSRF and rate limiting read `next/headers`, which only exists
+// inside a request. Importing this module installs an in-memory stand-in, so
+// services can be tested directly instead of being reshaped for the runner.
+import './helpers/request-context';
