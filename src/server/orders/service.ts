@@ -24,6 +24,8 @@ import {
  */
 
 const ORDER_DETAIL_INCLUDE = {
+  // The customer is included for the admin view; the storefront ignores it.
+  user: { select: { id: true, firstName: true, lastName: true, email: true } },
   items: { orderBy: { id: 'asc' as const } },
   addresses: true,
   payments: { orderBy: { createdAt: 'desc' as const } },
