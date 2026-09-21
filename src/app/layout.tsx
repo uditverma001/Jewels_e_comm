@@ -47,7 +47,7 @@ const organizationSchema = {
   name: SITE.name,
   url: SITE.url,
   description: SITE.description,
-  logo: absoluteUrl('/logo.svg'),
+  logo: absoluteUrl('/icon.svg'),
   address: {
     '@type': 'PostalAddress',
     addressCountry: 'IN',

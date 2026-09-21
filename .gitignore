@@ -32,3 +32,8 @@ test-results
 
 # local media storage driver
 public/uploads
+
+# local preview/screenshot helpers (not part of the app)
+shot.mjs
+list404.mjs
+restart-dev-server.sh

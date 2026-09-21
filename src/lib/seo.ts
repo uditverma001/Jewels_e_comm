@@ -38,7 +38,8 @@ export function buildMetadata(params: {
         width: 1200,
         height: 1200,
       }))
-    : [{ url: absoluteUrl('/og-default.jpg'), alt: SITE.name, width: 1200, height: 630 }];
+    : // Falls through to the generated card in `app/opengraph-image.tsx`.
+      [{ url: absoluteUrl('/opengraph-image'), alt: SITE.name, width: 1200, height: 630 }];
 
   return {
     title: params.title,

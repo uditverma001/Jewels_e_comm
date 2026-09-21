@@ -43,11 +43,20 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
     formats: ['image/avif', 'image/webp'],
+    // Only the object stores we actually serve media from. Adding a wildcard
+    // here would let any URL in the database become an image-optimizer proxy.
     remotePatterns: [
-      { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: '**.r2.dev' },
       { protocol: 'https', hostname: '**.amazonaws.com' },
+      { protocol: 'https', hostname: '**.cloudfront.net' },
     ],
+    // The seed's placeholder artwork is SVG. Next refuses to optimize SVG by
+    // default (an SVG can carry script), so it is served as-is — which is safe
+    // here because these files are ours, in `public/`, not user uploads.
+    // Uploaded media is restricted to raster types by the storage layer.
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],

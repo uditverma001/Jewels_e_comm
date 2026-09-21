@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-label="Devi Kada Bangle">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#eeeae4"/>
+      <stop offset="100%" stop-color="#d9cfc2"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="46%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="1500" fill="url(#bg)"/>
+  <rect width="1200" height="1500" fill="url(#glow)"/>
+  <rect x="44" y="44" width="1112" height="1412" fill="none" stroke="#b79b62" stroke-opacity="0.34" stroke-width="1.5"/>
+
+  <g fill="#3a332b" font-family="Georgia, 'Times New Roman', serif" text-anchor="middle">
+    <text x="600" y="750" font-size="62" font-weight="300">Devi Kada Bangle</text>
+  </g>
+
+  <text x="600" y="858" fill="#8a7a63"
+        font-family="Helvetica, Arial, sans-serif" font-size="23" letter-spacing="7"
+        text-anchor="middle">VIEW 1</text>
+
+  <text x="600" y="1424" fill="#a3947e"
+        font-family="Helvetica, Arial, sans-serif" font-size="19" letter-spacing="5"
+        text-anchor="middle">PHOTOGRAPHY PENDING</text>
+</svg>

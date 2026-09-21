@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1200" viewBox="0 0 2000 1200" role="img" aria-label="Aurelia">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#eeeae4"/>
+      <stop offset="100%" stop-color="#d9cfc2"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="46%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="2000" height="1200" fill="url(#bg)"/>
+  <rect width="2000" height="1200" fill="url(#glow)"/>
+  <rect x="44" y="44" width="1912" height="1112" fill="none" stroke="#b79b62" stroke-opacity="0.34" stroke-width="1.5"/>
+
+  <g fill="#3a332b" font-family="Georgia, 'Times New Roman', serif" text-anchor="middle">
+    <text x="1000" y="600" font-size="62" font-weight="300">Aurelia</text>
+  </g>
+
+  <text x="1000" y="708" fill="#8a7a63"
+        font-family="Helvetica, Arial, sans-serif" font-size="23" letter-spacing="7"
+        text-anchor="middle">FINE JEWELLERY</text>
+
+  <text x="1000" y="1124" fill="#a3947e"
+        font-family="Helvetica, Arial, sans-serif" font-size="19" letter-spacing="5"
+        text-anchor="middle">PHOTOGRAPHY PENDING</text>
+</svg>

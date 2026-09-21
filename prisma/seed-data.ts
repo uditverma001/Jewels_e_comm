@@ -30,12 +30,40 @@ export interface SeedProduct {
   tags: string[];
   attributes: Record<string, string>;
   specs: { label: string; value: string }[];
-  images: string[];
+  /** How many placeholder/production views this piece has. */
+  imageCount: number;
   optionName?: string;
   variants: SeedVariant[];
   isFeatured?: boolean;
   isBestSeller?: boolean;
 }
+
+/**
+ * Seed imagery.
+ *
+ * Defaults to the locally generated placeholders in `public/images/placeholders`
+ * so the storefront renders with no outbound network and no third-party
+ * dependency. Point `SEED_IMAGE_BASE_URL` at a real CDN to seed with actual
+ * photography; the app itself always reads image URLs from the database and
+ * never hard-codes a host.
+ */
+const IMAGE_BASE = process.env.SEED_IMAGE_BASE_URL?.replace(/\/$/, '') ?? null;
+
+export const productImage = (sku: string, view: number): string =>
+  IMAGE_BASE
+    ? `${IMAGE_BASE}/products/${sku.toLowerCase()}-${view}.jpg`
+    : `/images/placeholders/${sku.toLowerCase()}-${view}.svg`;
+
+export const categoryImage = (slug: string): string =>
+  IMAGE_BASE ? `${IMAGE_BASE}/categories/${slug}.jpg` : `/images/placeholders/category-${slug}.svg`;
+
+export const collectionImage = (slug: string): string =>
+  IMAGE_BASE
+    ? `${IMAGE_BASE}/collections/${slug}.jpg`
+    : `/images/placeholders/collection-${slug}.svg`;
+
+export const heroImage = (): string =>
+  IMAGE_BASE ? `${IMAGE_BASE}/hero.jpg` : '/images/placeholders/hero.svg';
 
 export const CATEGORIES = [
   {
@@ -43,7 +71,7 @@ export const CATEGORIES = [
     slug: 'rings',
     description:
       'From solitaire engagement rings to everyday stacking bands, each ring is hand-set and finished in our Mumbai atelier.',
-    imageUrl: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1200&q=80',
+    imageUrl: categoryImage('rings'),
     children: [
       { name: 'Engagement Rings', slug: 'engagement-rings' },
       { name: 'Everyday Bands', slug: 'everyday-bands' },
@@ -55,7 +83,7 @@ export const CATEGORIES = [
     slug: 'necklaces',
     description:
       'Pendants, chains and statement necklaces in 18K and 22K gold, designed to layer and to last.',
-    imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=1200&q=80',
+    imageUrl: categoryImage('necklaces'),
     children: [
       { name: 'Pendants', slug: 'pendants' },
       { name: 'Chains', slug: 'chains' },
@@ -65,7 +93,7 @@ export const CATEGORIES = [
     name: 'Earrings',
     slug: 'earrings',
     description: 'Studs, hoops and jhumkas — the pieces you reach for without thinking.',
-    imageUrl: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=1200&q=80',
+    imageUrl: categoryImage('earrings'),
     children: [
       { name: 'Studs', slug: 'studs' },
       { name: 'Hoops', slug: 'hoops' },
@@ -76,7 +104,7 @@ export const CATEGORIES = [
     name: 'Bracelets',
     slug: 'bracelets',
     description: 'Tennis bracelets, kadas and chain bracelets, sized to sit properly on the wrist.',
-    imageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=1200&q=80',
+    imageUrl: categoryImage('bracelets'),
     children: [
       { name: 'Tennis Bracelets', slug: 'tennis-bracelets' },
       { name: 'Bangles', slug: 'bangles' },
@@ -86,7 +114,7 @@ export const CATEGORIES = [
     name: 'Mangalsutra',
     slug: 'mangalsutra',
     description: 'Contemporary and traditional mangalsutra, in black bead and gold.',
-    imageUrl: 'https://images.unsplash.com/photo-1617038220319-276d3cfab638?w=1200&q=80',
+    imageUrl: categoryImage('mangalsutra'),
     children: [],
   },
 ] as const;
@@ -97,7 +125,7 @@ export const COLLECTIONS = [
     slug: 'bridal',
     description:
       'Heirloom-grade pieces for the ceremony and everything around it — certified diamonds, 22K gold, and settings built to be worn for decades.',
-    heroImageUrl: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?w=1600&q=80',
+    heroImageUrl: collectionImage('bridal'),
     isFeatured: true,
     position: 1,
   },
@@ -106,7 +134,7 @@ export const COLLECTIONS = [
     slug: 'everyday-fine',
     description:
       'Light, secure and quietly luxurious. Designed to go from a desk to dinner without a second thought.',
-    heroImageUrl: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=1600&q=80',
+    heroImageUrl: collectionImage('everyday-fine'),
     isFeatured: true,
     position: 2,
   },
@@ -115,7 +143,7 @@ export const COLLECTIONS = [
     slug: 'heritage',
     description:
       'Temple work, kundan and meenakari, made by craftspeople we have worked with for three generations.',
-    heroImageUrl: 'https://images.unsplash.com/photo-1601121141461-9d6647bca1ed?w=1600&q=80',
+    heroImageUrl: collectionImage('heritage'),
     isFeatured: true,
     position: 3,
   },
@@ -123,7 +151,7 @@ export const COLLECTIONS = [
     name: 'Men',
     slug: 'men',
     description: 'Restrained, substantial pieces in gold and platinum.',
-    heroImageUrl: 'https://images.unsplash.com/photo-1620656798579-1984d9e87df7?w=1600&q=80',
+    heroImageUrl: collectionImage('men'),
     isFeatured: false,
     position: 4,
   },
@@ -150,8 +178,6 @@ export const ATTRIBUTES = [
   { code: 'material', name: 'Craft', values: ['Handcrafted', 'Machine Finished', 'Temple Work'] },
   { code: 'size', name: 'Size', values: ['Small', 'Medium', 'Large', 'Adjustable'] },
 ] as const;
-
-const IMG = (id: string) => `https://images.unsplash.com/${id}?w=1400&q=80`;
 
 export const PRODUCTS: SeedProduct[] = [
   {
@@ -182,11 +208,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Band width', value: '1.8 – 2.1 mm' },
       { label: 'Hallmark', value: 'BIS 750' },
     ],
-    images: [
-      IMG('photo-1605100804763-247f67b3557e'),
-      IMG('photo-1602751584552-8ba73aad10e1'),
-      IMG('photo-1596944924616-7b38e7cfac36'),
-    ],
+    imageCount: 3,
     optionName: 'Ring Size',
     variants: [
       { optionValue: '6', skuSuffix: '06', weightGrams: 2.9, quantity: 4 },
@@ -230,7 +252,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Drop length', value: '52 mm' },
       { label: 'Hallmark', value: 'BIS 916' },
     ],
-    images: [IMG('photo-1535632066927-ab7c9ab60908'), IMG('photo-1611085583191-a3b181a88401')],
+    imageCount: 3,
     variants: [{ optionValue: null, skuSuffix: 'STD', weightGrams: 14.6, quantity: 5 }],
     isFeatured: true,
   },
@@ -261,7 +283,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Colour / Clarity', value: 'F–G / VS' },
       { label: 'Clasp', value: 'Box with figure-eight safety' },
     ],
-    images: [IMG('photo-1611591437281-460bfbe1220a'), IMG('photo-1573408301185-9146fe634ad0')],
+    imageCount: 3,
     optionName: 'Length',
     variants: [
       { optionValue: 'Small (16 cm)', skuSuffix: 'S', weightGrams: 9.8, quantity: 2 },
@@ -301,7 +323,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Clasp', value: 'Lobster, 9 mm' },
       { label: 'Hallmark', value: 'BIS 750' },
     ],
-    images: [IMG('photo-1599643478518-a784e5dc4c8f'), IMG('photo-1611652022419-a9419f74343d')],
+    imageCount: 3,
     optionName: 'Length',
     variants: [
       { optionValue: '40 cm', skuSuffix: '40', weightGrams: 3.2, quantity: 12 },
@@ -346,7 +368,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Colour / Clarity', value: 'G / VS2' },
       { label: 'Post', value: '0.9 mm, push-back' },
     ],
-    images: [IMG('photo-1630019852942-f89202989a59'), IMG('photo-1629224316810-9d8805b95e76')],
+    imageCount: 2,
     variants: [{ optionValue: null, skuSuffix: 'STD', weightGrams: 1.8, quantity: 22 }],
     isFeatured: true,
     isBestSeller: true,
@@ -378,7 +400,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Setting', value: 'Closed-back bezel' },
       { label: 'Chain', value: '45 cm 18K cable, included' },
     ],
-    images: [IMG('photo-1617038220319-276d3cfab638'), IMG('photo-1608042314453-ae338d80c427')],
+    imageCount: 2,
     variants: [{ optionValue: null, skuSuffix: 'STD', weightGrams: 7.4, quantity: 3 }],
     isFeatured: true,
   },
@@ -408,7 +430,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Engraving', value: 'Hand engraved, included' },
       { label: 'Hallmark', value: 'BIS 916' },
     ],
-    images: [IMG('photo-1620656798579-1984d9e87df7'), IMG('photo-1518131672697-613becd4fab5')],
+    imageCount: 2,
     optionName: 'Ring Size',
     variants: [
       { optionValue: '9', skuSuffix: '09', weightGrams: 10.8, quantity: 3 },
@@ -447,7 +469,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Pavé', value: '0.18ct, 22 stones' },
       { label: 'Bead', value: 'Double strand rear, single front' },
     ],
-    images: [IMG('photo-1601121141461-9d6647bca1ed'), IMG('photo-1602173574767-37ac01994b2a')],
+    imageCount: 2,
     variants: [{ optionValue: null, skuSuffix: 'STD', weightGrams: 8.1, quantity: 7 }],
     isBestSeller: true,
   },
@@ -477,7 +499,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Hoop', value: '22 mm, 1 mm section' },
       { label: 'Closure', value: 'Hinged snap' },
     ],
-    images: [IMG('photo-1515562141207-7a88fb7ce338'), IMG('photo-1596944924591-ba1bb9f7e0f9')],
+    imageCount: 2,
     variants: [{ optionValue: null, skuSuffix: 'STD', weightGrams: 2.6, quantity: 15 }],
   },
   {
@@ -506,7 +528,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Finish', value: 'Hand chased' },
       { label: 'Hallmark', value: 'BIS 916' },
     ],
-    images: [IMG('photo-1602173574767-37ac01994b2a'), IMG('photo-1611085583191-a3b181a88401')],
+    imageCount: 2,
     optionName: 'Size',
     variants: [
       { optionValue: '2.4', skuSuffix: '24', weightGrams: 21.2, quantity: 2 },
@@ -544,7 +566,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Metal', value: 'PT950' },
       { label: 'Finish', value: 'Satin' },
     ],
-    images: [IMG('photo-1595781572981-d63151b232ed'), IMG('photo-1606760227091-3dd870d97f1d')],
+    imageCount: 2,
     optionName: 'Ring Size',
     variants: [
       { optionValue: '6', skuSuffix: '06', weightGrams: 4.1, quantity: 6 },
@@ -583,7 +605,7 @@ export const PRODUCTS: SeedProduct[] = [
       { label: 'Shoulders', value: 'Uncut polki, 0.55ct' },
       { label: 'Setting', value: 'Cushion bezel' },
     ],
-    images: [IMG('photo-1596944924616-7b38e7cfac36'), IMG('photo-1602751584552-8ba73aad10e1')],
+    imageCount: 2,
     optionName: 'Ring Size',
     variants: [
       { optionValue: '7', skuSuffix: '07', weightGrams: 12.4, quantity: 1 },

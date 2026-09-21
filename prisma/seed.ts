@@ -9,6 +9,7 @@ import {
   COLLECTIONS,
   COUPONS,
   PRODUCTS,
+  productImage,
   SHIPPING_METHODS,
 } from './seed-data';
 
@@ -253,14 +254,14 @@ async function seedProducts(taxonomy: Taxonomy) {
     // source of truth for them.
     await db.productMedia.deleteMany({ where: { productId: product.id } });
     await db.productMedia.createMany({
-      data: seed.images.map((url, index) => ({
+      data: Array.from({ length: seed.imageCount }, (_, index) => ({
         productId: product.id,
-        url,
+        url: productImage(seed.sku, index + 1),
         alt: `${seed.name} — view ${index + 1}`,
         type: 'IMAGE' as const,
         position: index,
-        width: 1400,
-        height: 1750,
+        width: 1200,
+        height: 1500,
       })),
     });
 
