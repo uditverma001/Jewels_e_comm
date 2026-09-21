@@ -36,10 +36,23 @@ export const revalidate = 300;
  * Product pages are the ones that must be fast and indexable; `revalidate`
  * above keeps them fresh, and an admin edit invalidates the specific page by
  * tag rather than waiting for the timer.
+ *
+ * Prerendering is an optimisation, not a requirement: a build without database
+ * access (CI, a container image built before the database exists) falls back to
+ * rendering these pages on demand rather than failing. Failing the build here
+ * would make the database a build-time dependency for no correctness gain.
  */
 export async function generateStaticParams() {
-  const products = await listIndexableProducts();
-  return products.slice(0, 200).map((product) => ({ slug: product.slug }));
+  try {
+    const products = await listIndexableProducts();
+    return products.slice(0, 200).map((product) => ({ slug: product.slug }));
+  } catch (error) {
+    console.warn(
+      '[build] Could not reach the database to prerender product pages; they will render on demand.',
+      error instanceof Error ? error.message : String(error),
+    );
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
