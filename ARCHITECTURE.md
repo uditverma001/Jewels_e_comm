@@ -3,37 +3,37 @@
 > Premium jewellery e-commerce storefront + admin, built for the Indian market (INR, GST, UPI-first payments).
 
 This document is the decision record for the stack, the system architecture and the data model.
-It is written to be reviewed *before* the bulk of the implementation lands.
+It is written to be reviewed _before_ the bulk of the implementation lands.
 
 ---
 
 ## 1. Executive summary
 
-| Concern | Decision |
-| --- | --- |
-| Language | TypeScript (strict), end to end |
-| Framework | Next.js 15 (App Router, React 19 Server Components) |
-| Backend | Same Next.js process; business logic isolated in a framework-agnostic `src/server` layer |
-| Database | PostgreSQL 16 |
-| ORM | Prisma 6 |
-| Auth | First-party session layer: Argon2id password hashing + opaque, DB-backed, hashed session tokens |
-| Authorization | Role-based (`CUSTOMER` / `STAFF` / `ADMIN`) enforced in a single server-side guard |
-| Payments | Razorpay (primary), behind a `PaymentProvider` interface |
-| File storage | S3-compatible via presigned uploads, behind a `StorageProvider` interface (local driver for dev) |
-| Search | PostgreSQL full-text (`tsvector` + GIN) with `pg_trgm` trigram fallback for typos/autocomplete |
-| Caching | Next.js data cache + tag revalidation + HTTP caching. **No Redis.** |
-| Email | Provider interface, Resend driver in prod, console driver in dev |
-| Validation | Zod at every trust boundary (including `process.env`) |
-| State | Server-owned state (cart/wishlist live in Postgres); client state kept deliberately tiny |
-| UI | Tailwind CSS v4 + Radix UI primitives (shadcn-style, vendored) |
-| Testing | Vitest (unit + integration against real Postgres) + Playwright (e2e) |
-| Deploy | Single Docker image (`next build` standalone) + managed Postgres + S3/R2 + CDN |
+| Concern       | Decision                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| Language      | TypeScript (strict), end to end                                                                  |
+| Framework     | Next.js 15 (App Router, React 19 Server Components)                                              |
+| Backend       | Same Next.js process; business logic isolated in a framework-agnostic `src/server` layer         |
+| Database      | PostgreSQL 16                                                                                    |
+| ORM           | Prisma 6                                                                                         |
+| Auth          | First-party session layer: Argon2id password hashing + opaque, DB-backed, hashed session tokens  |
+| Authorization | Role-based (`CUSTOMER` / `STAFF` / `ADMIN`) enforced in a single server-side guard               |
+| Payments      | Razorpay (primary), behind a `PaymentProvider` interface                                         |
+| File storage  | S3-compatible via presigned uploads, behind a `StorageProvider` interface (local driver for dev) |
+| Search        | PostgreSQL full-text (`tsvector` + GIN) with `pg_trgm` trigram fallback for typos/autocomplete   |
+| Caching       | Next.js data cache + tag revalidation + HTTP caching. **No Redis.**                              |
+| Email         | Provider interface, Resend driver in prod, console driver in dev                                 |
+| Validation    | Zod at every trust boundary (including `process.env`)                                            |
+| State         | Server-owned state (cart/wishlist live in Postgres); client state kept deliberately tiny         |
+| UI            | Tailwind CSS v4 + Radix UI primitives (shadcn-style, vendored)                                   |
+| Testing       | Vitest (unit + integration against real Postgres) + Playwright (e2e)                             |
+| Deploy        | Single Docker image (`next build` standalone) + managed Postgres + S3/R2 + CDN                   |
 
 ---
 
 ## 2. Why this stack
 
-### 2.1 Next.js 15 App Router — frontend *and* backend
+### 2.1 Next.js 15 App Router — frontend _and_ backend
 
 E-commerce lives or dies on SEO and first-paint. Category and product pages must be
 server-rendered, indexable HTML with correct metadata and structured data. The App Router gives us:
@@ -45,19 +45,19 @@ server-rendered, indexable HTML with correct metadata and structured data. The A
   image-heavy category; this is worth a lot.
 - **Metadata API, `sitemap.ts`, `robots.ts`** — SEO primitives built in.
 - **Route Handlers** — a proper place for webhooks (`/api/webhooks/razorpay`) that need the raw body.
-- **Server Actions** — mutations without hand-written fetch plumbing, with the *server* as the
+- **Server Actions** — mutations without hand-written fetch plumbing, with the _server_ as the
   single source of truth for price, discount and stock.
 
 **Alternatives considered**
 
-- *Separate NestJS API + React SPA.* Rejected for now. It doubles the deployment surface, splits
+- _Separate NestJS API + React SPA._ Rejected for now. It doubles the deployment surface, splits
   auth/session handling across two services, and loses SSR for the pages that need indexing. The cost
   is real and the benefit (independent scaling, multi-client API) is hypothetical for a single store.
   Mitigation: all business logic lives in `src/server/**` and never in components or route handlers,
   so lifting it into a standalone service later is a move, not a rewrite.
-- *Remix.* Comparable quality; smaller ecosystem for commerce integrations and no equivalent of the
+- _Remix._ Comparable quality; smaller ecosystem for commerce integrations and no equivalent of the
   RSC-based zero-JS content rendering at the time of writing.
-- *Astro.* Excellent for the marketing surface, weaker for the large interactive surface (cart,
+- _Astro._ Excellent for the marketing surface, weaker for the large interactive surface (cart,
   checkout, admin) — we would end up with two apps.
 
 ### 2.2 PostgreSQL 16
@@ -71,7 +71,7 @@ Postgres gives us in one system what would otherwise be three:
 - `jsonb` for genuinely schemaless payloads (webhook bodies, audit metadata).
 - **Full-text search** (`tsvector`, GIN) and **`pg_trgm`** — good enough search without another service.
 
-*Alternative:* MySQL (weaker FTS, no partial indexes), MongoDB (wrong tool — this data is relational
+_Alternative:_ MySQL (weaker FTS, no partial indexes), MongoDB (wrong tool — this data is relational
 and money needs transactions).
 
 ### 2.3 Prisma 6
@@ -80,12 +80,12 @@ Chosen for type safety and migration ergonomics: the generated client makes inva
 compile error, `prisma migrate` produces reviewable SQL files, and the schema doubles as living
 documentation of the data model.
 
-*Trade-off:* Prisma's query builder is weaker than raw SQL for faceted search and analytics, and
+_Trade-off:_ Prisma's query builder is weaker than raw SQL for faceted search and analytics, and
 it can emit inefficient queries if used carelessly. Mitigation: the catalogue search/filter query
 and the admin dashboard aggregates are written as **parameterised raw SQL** (`$queryRaw` with
 tagged templates — never string concatenation) inside the repository layer, where they're tested.
 
-*Alternative:* Drizzle — lighter and closer to SQL, but its migration story and introspection are
+_Alternative:_ Drizzle — lighter and closer to SQL, but its migration story and introspection are
 less mature. Prisma wins on maintainability for a team that will grow.
 
 ### 2.4 Authentication — a deliberate choice
@@ -98,7 +98,7 @@ We implement the session layer ourselves, using standard, well-documented primit
 - Sliding expiry, explicit revocation, and a per-user session list (the "sign out other devices" UX).
 - Single-use, hashed, expiring tokens for email verification and password reset.
 
-This is *not* rolling our own crypto — it is the standard opaque-token pattern, roughly 200 lines,
+This is _not_ rolling our own crypto — it is the standard opaque-token pattern, roughly 200 lines,
 fully covered by tests.
 
 **Why not Auth.js (NextAuth) v5?** Its Credentials provider **cannot use database sessions** — it
@@ -123,11 +123,12 @@ The store prices in **INR** and sells to Indian customers.
 Implementation is behind a `PaymentProvider` interface (`createOrder`, `verifyCallbackSignature`,
 `parseWebhookEvent`, `refund`) so Stripe can be added for an international storefront without touching
 the order state machine. A `FakePaymentProvider` (deterministic, signature-verifying) backs tests and
-credential-free local development — the *state machine itself is never faked*.
+credential-free local development — the _state machine itself is never faked_.
 
 **Payment integrity rules (non-negotiable):**
+
 1. Amounts are computed server-side from the database, never accepted from the client.
-2. A checkout callback from the browser only *hints* that payment happened; it verifies the HMAC
+2. A checkout callback from the browser only _hints_ that payment happened; it verifies the HMAC
    signature and then re-reads the provider's own record.
 3. The **webhook is the source of truth** for `PAID`. Signatures are verified against the raw request
    body; every event is recorded in `PaymentEvent` with a unique `providerEventId`, making
@@ -254,7 +255,7 @@ line level, then summed — so the displayed lines always add up to the displaye
 
 **Every product has at least one variant.** Even a one-size pendant gets a default variant. This
 removes an entire class of `if (hasVariants)` branching from cart, inventory and orders: cart items,
-order items and stock *always* point at a `ProductVariant`.
+order items and stock _always_ point at a `ProductVariant`.
 
 **Variant options are generic, not jewellery-specific.**
 `ProductOption` ("Size") → `ProductOptionValue` ("6", "7", "8") → `VariantOptionValue` (join).
@@ -263,7 +264,7 @@ Ring sizes, bracelet S/M/L and chain lengths all fall out of the same three tabl
 
 **Facets are data too.** `Attribute` (metal type, purity, stone type, material) → `AttributeValue`
 ("22K", "Diamond") → `ProductAttributeValue` (join). Filters are built by generating one `EXISTS`
-clause per attribute — *OR within an attribute, AND across attributes* — which is both the correct
+clause per attribute — _OR within an attribute, AND across attributes_ — which is both the correct
 faceted-search semantic and index-friendly. The alternative (a column per jewellery property) would
 mean a schema migration every time merchandising invents a facet.
 `gender`, `status` and price stay as real columns because they are on nearly every query.
@@ -302,21 +303,21 @@ Carts, sessions and reservations are hard-deleted or expired; keeping them would
 
 ## 5. Security posture
 
-| Threat | Control |
-| --- | --- |
-| SQL injection | Prisma parameterises everything; raw SQL only via tagged templates. No string-built SQL. |
-| XSS | React escapes by default; no `dangerouslySetInnerHTML` on user content; strict CSP header. |
-| CSRF | `SameSite=Lax` session cookie + `Origin` check on every state-changing request. |
-| Broken authorization | One `requireUser` / `requireRole` guard; admin routes additionally gated in middleware. |
-| IDOR | Every resource read is scoped by owner (`where: { id, userId }`), never by id alone. |
-| Session attacks | Hashed tokens at rest, rotation on privilege change, revocation list, sliding expiry. |
-| Mass assignment | Zod schemas whitelist fields; Prisma inputs are constructed explicitly, never spread from the body. |
-| Price / discount manipulation | Totals are recomputed server-side at checkout. Client totals are display-only. |
-| Coupon abuse | Server-side validation of window, usage caps and per-user caps, enforced by a unique redemption row inside the order transaction. |
-| Inventory manipulation | Atomic conditional updates + expiring reservations. |
-| Payment spoofing | HMAC verification on callbacks *and* webhooks, against the raw body; orders are only marked paid from a verified provider event. |
-| Brute force / abuse | Rate limits on login, registration, password reset, coupon application and checkout. |
-| Secret exposure | Zod-validated env; only `NEXT_PUBLIC_*` reaches the browser; `.env.example` holds no real values. |
+| Threat                        | Control                                                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| SQL injection                 | Prisma parameterises everything; raw SQL only via tagged templates. No string-built SQL.                                          |
+| XSS                           | React escapes by default; no `dangerouslySetInnerHTML` on user content; strict CSP header.                                        |
+| CSRF                          | `SameSite=Lax` session cookie + `Origin` check on every state-changing request.                                                   |
+| Broken authorization          | One `requireUser` / `requireRole` guard; admin routes additionally gated in middleware.                                           |
+| IDOR                          | Every resource read is scoped by owner (`where: { id, userId }`), never by id alone.                                              |
+| Session attacks               | Hashed tokens at rest, rotation on privilege change, revocation list, sliding expiry.                                             |
+| Mass assignment               | Zod schemas whitelist fields; Prisma inputs are constructed explicitly, never spread from the body.                               |
+| Price / discount manipulation | Totals are recomputed server-side at checkout. Client totals are display-only.                                                    |
+| Coupon abuse                  | Server-side validation of window, usage caps and per-user caps, enforced by a unique redemption row inside the order transaction. |
+| Inventory manipulation        | Atomic conditional updates + expiring reservations.                                                                               |
+| Payment spoofing              | HMAC verification on callbacks _and_ webhooks, against the raw body; orders are only marked paid from a verified provider event.  |
+| Brute force / abuse           | Rate limits on login, registration, password reset, coupon application and checkout.                                              |
+| Secret exposure               | Zod-validated env; only `NEXT_PUBLIC_*` reaches the browser; `.env.example` holds no real values.                                 |
 
 Security headers (CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`) are set
 centrally in `next.config.ts` / middleware.
@@ -342,11 +343,11 @@ centrally in `next.config.ts` / middleware.
 
 ## 7. Testing strategy
 
-| Layer | Tool | What it covers |
-| --- | --- | --- |
-| Unit | Vitest | Money arithmetic, pricing/tax/shipping, coupon rules, order state machine, RBAC, webhook signature verification |
+| Layer       | Tool                   | What it covers                                                                                                                                    |
+| ----------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit        | Vitest                 | Money arithmetic, pricing/tax/shipping, coupon rules, order state machine, RBAC, webhook signature verification                                   |
 | Integration | Vitest + real Postgres | Cart merge on login, concurrent checkout (overselling), order placement transaction, webhook idempotency, review eligibility, admin authorization |
-| E2E | Playwright | Browse → filter → PDP → add to cart → checkout → pay (fake provider) → order confirmation; login/register; admin product creation |
+| E2E         | Playwright             | Browse → filter → PDP → add to cart → checkout → pay (fake provider) → order confirmation; login/register; admin product creation                 |
 
 Tests target behaviour that can actually break in production. We do not write assertions against
 rendered markup for its own sake, and we do not chase a coverage number.
