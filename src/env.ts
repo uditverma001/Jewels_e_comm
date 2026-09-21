@@ -57,8 +57,15 @@ const serverSchema = z
   })
   // Production must not silently run on development stand-ins. These are the
   // failure modes that would otherwise only show up as lost money.
+  //
+  // The checks key off NODE_ENV *and* the app's own origin. `next start`
+  // forces NODE_ENV=production even for a local preview, and a rule that made
+  // `pnpm build && pnpm start` impossible would simply get weakened by the
+  // first person it inconvenienced. A deployment answering on localhost is not
+  // a production deployment.
   .superRefine((cfg, ctx) => {
     if (cfg.NODE_ENV !== 'production') return;
+    if (isLocalOrigin(cfg.APP_URL)) return;
 
     if (cfg.PAYMENT_PROVIDER === 'fake') {
       ctx.addIssue({
@@ -121,6 +128,16 @@ const serverSchema = z
       });
     }
   });
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
+
+function isLocalOrigin(appUrl: string): boolean {
+  try {
+    return LOCAL_HOSTS.has(new URL(appUrl).hostname);
+  } catch {
+    return false;
+  }
+}
 
 function parseServerEnv() {
   const parsed = serverSchema.safeParse(process.env);

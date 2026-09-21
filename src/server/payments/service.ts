@@ -250,10 +250,13 @@ async function applyCapture(providerPayment: ProviderPayment, providerName: stri
       }
     }
 
-    // The cart has served its purpose.
-    if (payment.order.userId) {
+    // Retire the cart this order came from. Keyed on the order's own cartId
+    // rather than on the user, because a guest has no account to look one up
+    // by — and leaving their bag full after they have paid is both confusing
+    // and a route to buying the same piece twice.
+    if (payment.order.cartId) {
       await tx.cart.updateMany({
-        where: { userId: payment.order.userId, status: 'ACTIVE' },
+        where: { id: payment.order.cartId, status: 'ACTIVE' },
         data: { status: 'CONVERTED' },
       });
     }

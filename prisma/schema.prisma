@@ -688,6 +688,11 @@ model Order {
   shippingMethodCode String?
   shippingMethodName String?
 
+  /// The cart this order was placed from. Kept so a completed payment can
+  /// retire the right cart — a guest has no user id to look one up by — and so
+  /// abandoned-cart analytics can tell converted carts from the rest.
+  cartId String?
+
   customerNote String?
   adminNote    String?
 
@@ -714,6 +719,7 @@ model Order {
   @@index([paymentStatus])
   @@index([email])
   @@index([createdAt(sort: Desc)])
+  @@index([cartId])
 }
 
 /// Immutable purchase-time snapshot. Editing or deleting a product must never

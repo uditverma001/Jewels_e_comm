@@ -323,6 +323,7 @@ export async function createOrder(owner: CartOwner, input: CheckoutInput): Promi
         shippingMinor: priced.shippingMinor,
         totalMinor: priced.totalMinor,
         couponCode: coupon?.code ?? null,
+        cartId: cart.id,
         shippingMethodCode: shipping.code,
         shippingMethodName: shipping.name,
         customerNote: input.customerNote || null,

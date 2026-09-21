@@ -97,3 +97,11 @@ export const verifyPaymentSchema = z.object({
 });
 
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
+
+export const abandonCheckoutSchema = z.object({
+  orderId: z.string().min(1).max(40),
+});
+
+export const quoteCheckoutSchema = z.object({
+  shippingMethodCode: z.string().trim().min(1).max(40),
+});

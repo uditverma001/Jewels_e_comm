@@ -100,7 +100,7 @@ async function main() {
   let written = 0;
 
   for (const [index, product] of PRODUCTS.entries()) {
-    for (let view = 0; view < product.images.length; view += 1) {
+    for (let view = 0; view < product.imageCount; view += 1) {
       const svg = buildSvg({
         title: product.name,
         subtitle: `View ${view + 1}`,
