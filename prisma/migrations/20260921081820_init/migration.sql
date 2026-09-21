@@ -1,3 +1,9 @@
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "citext";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('CUSTOMER', 'STAFF', 'ADMIN');
 
@@ -43,7 +49,7 @@ CREATE TYPE "ReviewStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
+    "email" CITEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
@@ -206,6 +212,24 @@ CREATE TABLE "Product" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
+    -- Maintained by Postgres, not by the application. Weighted so a name hit
+    -- outranks a description hit: A = name, B = sku + tags, C = short
+    -- description, D = description. STORED GENERATED keeps it in the same
+    -- write as the row, so the index can never drift from the data.
+    --
+    -- Tags go in via array_to_tsvector(), the only *immutable* way to fold a
+    -- text[] into a tsvector — which is why the Product_tags_well_formed
+    -- constraint below exists: array_to_tsvector() rejects empty lexemes, and
+    -- it does not stem or case-fold, so tags must already be lowercase to
+    -- match a stemmed query. Without tags here, searching "diamond ring" would
+    -- miss a diamond solitaire whose prose never uses the word "diamond".
+    "searchVector" tsvector GENERATED ALWAYS AS (
+        setweight(to_tsvector('english'::regconfig, coalesce("name", '')), 'A') ||
+        setweight(to_tsvector('english'::regconfig, coalesce("sku", '')), 'B') ||
+        setweight(array_to_tsvector("tags"), 'B') ||
+        setweight(to_tsvector('english'::regconfig, coalesce("shortDescription", '')), 'C') ||
+        setweight(to_tsvector('english'::regconfig, coalesce("description", '')), 'D')
+    ) STORED,
 
     CONSTRAINT "Product_pkey" PRIMARY KEY ("id")
 );
@@ -712,6 +736,12 @@ CREATE INDEX "Product_isBestSeller_status_idx" ON "Product"("isBestSeller", "sta
 CREATE INDEX "Product_deletedAt_idx" ON "Product"("deletedAt");
 
 -- CreateIndex
+CREATE INDEX "Product_searchVector_idx" ON "Product" USING GIN ("searchVector");
+
+-- CreateIndex
+CREATE INDEX "Product_tags_idx" ON "Product" USING GIN ("tags");
+
+-- CreateIndex
 CREATE INDEX "ProductAttributeValue_attributeValueId_idx" ON "ProductAttributeValue"("attributeValueId");
 
 -- CreateIndex
@@ -1027,64 +1057,21 @@ ALTER TABLE "Review" ADD CONSTRAINT "Review_orderItemId_fkey" FOREIGN KEY ("orde
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorUserId_fkey" FOREIGN KEY ("actorUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- ===========================================================================
--- Hand-written additions. These express guarantees Prisma's schema language
--- cannot: extensions, generated search vectors, partial uniqueness and
--- non-negativity checks on money and stock.
+-- Hand-written additions: guarantees Prisma's schema language cannot express.
 -- ===========================================================================
-
--- Trigram index support for typo-tolerant search and autocomplete.
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
--- Case-insensitive email comparison without LOWER() on every lookup.
-CREATE EXTENSION IF NOT EXISTS citext;
-
--- Emails are identities: compare them case-insensitively at the storage layer.
-ALTER TABLE "User" ALTER COLUMN "email" TYPE CITEXT;
-ALTER TABLE "NewsletterSubscriber" ALTER COLUMN "email" TYPE CITEXT;
-
--- ---------------------------------------------------------------------------
--- Full-text search.
---
--- Weighted so a name hit outranks a description hit:
---   A = name, B = sku, C = short description, D = description.
---
--- STORED GENERATED means Postgres maintains it inside the same write as the
--- row: there is no cache to invalidate and no way for the index to drift.
---
--- Tags are deliberately NOT in this vector. The only immutable way to fold a
--- text[] into a tsvector is array_to_tsvector(), which throws on empty-string
--- elements and would turn a harmless tag typo into a failed product save.
--- Tags get their own GIN array index below and are matched by overlap in the
--- search query, which is both safer and a better fit (tags are exact labels,
--- not prose to be stemmed).
--- ---------------------------------------------------------------------------
-ALTER TABLE "Product"
-  ADD COLUMN "searchVector" tsvector
-  GENERATED ALWAYS AS (
-    setweight(to_tsvector('english'::regconfig, coalesce("name", '')), 'A') ||
-    setweight(to_tsvector('english'::regconfig, coalesce("sku", '')), 'B') ||
-    setweight(to_tsvector('english'::regconfig, coalesce("shortDescription", '')), 'C') ||
-    setweight(to_tsvector('english'::regconfig, coalesce("description", '')), 'D')
-  ) STORED;
-
-CREATE INDEX "Product_searchVector_idx" ON "Product" USING GIN ("searchVector");
-CREATE INDEX "Product_tags_idx" ON "Product" USING GIN ("tags");
-CREATE INDEX "Product_name_trgm_idx" ON "Product" USING GIN ("name" gin_trgm_ops);
-CREATE INDEX "Product_sku_trgm_idx" ON "Product" USING GIN ("sku" gin_trgm_ops);
-CREATE INDEX "Category_name_trgm_idx" ON "Category" USING GIN ("name" gin_trgm_ops);
-CREATE INDEX "Brand_name_trgm_idx" ON "Brand" USING GIN ("name" gin_trgm_ops);
 
 -- ---------------------------------------------------------------------------
 -- A signed-in customer may have at most one ACTIVE cart. Historic CONVERTED /
--- ABANDONED carts are kept, so a plain unique index would be wrong.
+-- ABANDONED carts are retained, so a plain unique index would be wrong.
 -- ---------------------------------------------------------------------------
 CREATE UNIQUE INDEX "Cart_one_active_per_user"
   ON "Cart" ("userId")
   WHERE "status" = 'ACTIVE' AND "userId" IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
--- Integrity constraints. These are the last line of defence behind the service
--- layer: a bug that tries to oversell or write a negative total is rejected by
--- the database rather than silently persisted.
+-- Integrity constraints. The last line of defence behind the service layer: a
+-- bug that tries to oversell, or to persist a negative total, is rejected by
+-- the database rather than silently written.
 -- ---------------------------------------------------------------------------
 ALTER TABLE "Inventory"
   ADD CONSTRAINT "Inventory_quantity_non_negative" CHECK ("quantity" >= 0),
@@ -1098,7 +1085,18 @@ ALTER TABLE "CartItem"
 ALTER TABLE "InventoryReservation"
   ADD CONSTRAINT "InventoryReservation_quantity_positive" CHECK ("quantity" > 0);
 
+-- Tags feed a generated tsvector that rejects empty lexemes and does not
+-- case-fold. This constraint states that requirement explicitly rather than
+-- leaving it as folklore. (Postgres evaluates generated columns before CHECK
+-- constraints, so a malformed tag surfaces as the array_to_tsvector error
+-- first; the application's Zod schema is what produces the friendly message.)
 ALTER TABLE "Product"
+  ADD CONSTRAINT "Product_tags_well_formed"
+    CHECK (
+      array_position("tags", '') IS NULL
+      AND array_position("tags", NULL) IS NULL
+      AND "tags"::text = lower("tags"::text)
+    ),
   ADD CONSTRAINT "Product_basePrice_non_negative" CHECK ("basePriceMinor" >= 0),
   ADD CONSTRAINT "Product_compareAt_above_base"
     CHECK ("compareAtPriceMinor" IS NULL OR "compareAtPriceMinor" > "basePriceMinor");

@@ -8,12 +8,15 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres"]
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // citext gives case-insensitive email identity at the storage layer.
+  // pg_trgm backs typo-tolerant search and prefix autocomplete.
+  extensions = [citext, pg_trgm]
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +36,7 @@ enum UserStatus {
 
 model User {
   id              String     @id @default(cuid())
-  email           String     @unique
+  email           String     @unique @db.Citext
   passwordHash    String
   firstName       String
   lastName        String
@@ -265,6 +268,13 @@ model Product {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  /// Weighted full-text index over name/sku/descriptions. The init migration
+  /// turns this into a STORED GENERATED column so Postgres maintains it inside
+  /// the same write as the row — there is no cache to invalidate and no way
+  /// for the index to drift. Declared here so migrations do not try to drop it;
+  /// the application never reads or writes it through Prisma.
+  searchVector Unsupported("tsvector")? @default(dbgenerated("((((setweight(to_tsvector('english'::regconfig, COALESCE(name, ''::text)), 'A'::\"char\") || setweight(to_tsvector('english'::regconfig, COALESCE(sku, ''::text)), 'B'::\"char\")) || setweight(array_to_tsvector(tags), 'B'::\"char\")) || setweight(to_tsvector('english'::regconfig, COALESCE(\"shortDescription\", ''::text)), 'C'::\"char\")) || setweight(to_tsvector('english'::regconfig, COALESCE(description, ''::text)), 'D'::\"char\"))"))
+
   category   Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   brand      Brand?      @relation(fields: [brandId], references: [id], onDelete: SetNull)
   collection Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
@@ -286,11 +296,8 @@ model Product {
   @@index([isFeatured, status])
   @@index([isBestSeller, status])
   @@index([deletedAt])
-  // `searchVector` (a STORED GENERATED tsvector) and its GIN index, plus the
-  // GIN index on `tags`, are created in the init migration. Prisma's schema
-  // describer cannot represent generated columns, so declaring them here would
-  // make every future `migrate dev` emit a phantom diff. They are DB-managed
-  // on purpose; `prisma db pull` will not round-trip them.
+  @@index([searchVector], type: Gin)
+  @@index([tags], type: Gin)
 }
 
 model ProductAttributeValue {
