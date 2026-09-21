@@ -11,6 +11,9 @@ const config = [
   {
     ignores: [
       '.next/**',
+      // Local preview helpers, not part of the application.
+      'shot.mjs',
+      'list404.mjs',
       'node_modules/**',
       'coverage/**',
       'playwright-report/**',
@@ -39,7 +42,7 @@ const config = [
     // Server-side scripts and integration drivers legitimately log.
     files: [
       'prisma/**/*.ts',
-      'scripts/**/*.ts',
+      'scripts/**/*.{ts,mjs}',
       'src/server/integrations/**/*.ts',
       'src/server/observability/**/*.ts',
     ],

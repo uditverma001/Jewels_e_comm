@@ -389,13 +389,23 @@ export async function findProductRail(
   return rows.map(toProductCard);
 }
 
-/** Related products: same category first, then the same collection. */
+/**
+ * Related products.
+ *
+ * Widened deliberately: an exact-category match is useless on a leaf category
+ * that holds a single piece (a solitaire is the only "engagement ring" we
+ * make), so this also reaches sibling categories under the same parent and the
+ * same collection. Results are ranked so the closest relationship wins.
+ */
 export async function findRelatedProducts(
   productId: string,
   categoryId: string,
-  collectionId: string | null,
-  limit = 4,
+  options: { parentCategoryId?: string | null; collectionId?: string | null; limit?: number } = {},
 ): Promise<ProductCard[]> {
+  const parentCategoryId = options.parentCategoryId ?? null;
+  const collectionId = options.collectionId ?? null;
+  const limit = options.limit ?? 4;
+
   const rows = await db.$queryRaw<ProductRow[]>`
     SELECT
       p."id", p."slug", p."name", p."sku", p."shortDescription",
@@ -413,9 +423,17 @@ export async function findRelatedProducts(
       AND p."publishedAt" IS NOT NULL AND p."publishedAt" <= NOW()
       AND agg."priceMinor" IS NOT NULL
       AND p."id" <> ${productId}
-      AND (p."categoryId" = ${categoryId}
-           OR (${collectionId}::text IS NOT NULL AND p."collectionId" = ${collectionId}))
-    ORDER BY (p."categoryId" = ${categoryId}) DESC, p."ratingCount" DESC, p."publishedAt" DESC NULLS LAST
+      AND (
+        p."categoryId" = ${categoryId}
+        OR (${parentCategoryId}::text IS NOT NULL
+            AND (c."parentId" = ${parentCategoryId} OR p."categoryId" = ${parentCategoryId}))
+        OR (${collectionId}::text IS NOT NULL AND p."collectionId" = ${collectionId})
+      )
+    ORDER BY
+      (p."categoryId" = ${categoryId}) DESC,
+      (${collectionId}::text IS NOT NULL AND p."collectionId" = ${collectionId}) DESC,
+      p."ratingCount" DESC,
+      p."publishedAt" DESC NULLS LAST
     LIMIT ${limit}
   `;
   return rows.map(toProductCard);

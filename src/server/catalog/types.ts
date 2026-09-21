@@ -93,10 +93,12 @@ export interface ProductDetail {
     id: string;
     name: string;
     slug: string;
+    /** Parent category id, used to widen "related products" beyond a leaf. */
+    parentId: string | null;
     parent: { name: string; slug: string } | null;
   };
   brand: { name: string; slug: string } | null;
-  collection: { name: string; slug: string } | null;
+  collection: { id: string; name: string; slug: string } | null;
 
   media: {
     id: string;

@@ -78,7 +78,7 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
     include: {
       category: { include: { parent: { select: { name: true, slug: true } } } },
       brand: { select: { name: true, slug: true } },
-      collection: { select: { name: true, slug: true } },
+      collection: { select: { id: true, name: true, slug: true } },
       media: { orderBy: { position: 'asc' } },
       specs: { orderBy: { position: 'asc' } },
       options: {
@@ -140,6 +140,7 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
       id: product.category.id,
       name: product.category.name,
       slug: product.category.slug,
+      parentId: product.category.parentId,
       parent: product.category.parent,
     },
     brand: product.brand,
