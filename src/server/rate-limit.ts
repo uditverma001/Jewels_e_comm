@@ -22,8 +22,21 @@ export interface RateLimitRule {
   windowSeconds: number;
 }
 
+/**
+ * A note on the two login limits.
+ *
+ * `login` is keyed by IP and is deliberately generous: an office, a university,
+ * or anyone behind mobile-carrier NAT shares one address with hundreds of
+ * people, and a tight per-IP limit locks out legitimate customers long before
+ * it inconveniences an attacker with a proxy pool.
+ *
+ * `loginAccount` is keyed by email address and is the strict one. That is the
+ * limit that actually stops credential stuffing, because it is scoped to the
+ * thing being attacked rather than to the network the attack arrives from.
+ */
 export const RATE_LIMITS = {
-  login: { limit: 8, windowSeconds: 300 },
+  login: { limit: 60, windowSeconds: 300 },
+  loginAccount: { limit: 8, windowSeconds: 300 },
   register: { limit: 5, windowSeconds: 900 },
   passwordReset: { limit: 4, windowSeconds: 900 },
   couponApply: { limit: 15, windowSeconds: 300 },

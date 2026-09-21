@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function SectionHeader({
+  id,
   eyebrow,
   title,
   description,
@@ -11,6 +12,9 @@ export function SectionHeader({
   align = 'left',
   className,
 }: {
+  /** Put on the visible heading so a section can label itself without a
+   *  duplicate screen-reader-only copy. */
+  id?: string;
   eyebrow?: string;
   title: string;
   description?: string;
@@ -31,7 +35,9 @@ export function SectionHeader({
     >
       <div className={cn('max-w-2xl', align === 'center' && 'mx-auto')}>
         {eyebrow ? <p className="eyebrow mb-2.5">{eyebrow}</p> : null}
-        <h2 className="text-[1.75rem] lg:text-[2.125rem]">{title}</h2>
+        <h2 id={id} className="text-[1.75rem] lg:text-[2.125rem]">
+          {title}
+        </h2>
         {description ? (
           <p className="mt-2.5 text-[0.9375rem] leading-relaxed text-stone-600">{description}</p>
         ) : null}

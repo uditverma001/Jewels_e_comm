@@ -27,7 +27,8 @@
     "test:integration": "pnpm db:test:setup && vitest run tests/integration",
     "test:e2e": "playwright test",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "db:test:setup": "node scripts/prepare-test-db.mjs"
+    "db:test:setup": "node scripts/prepare-test-db.mjs",
+    "test:e2e:ui": "playwright test --ui"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

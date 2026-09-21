@@ -38,7 +38,14 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  /**
+   * Standalone output produces a minimal server bundle for the Docker image,
+   * but it is incompatible with `next start` — so it is opt-in via the build
+   * environment rather than always on. Without this, `pnpm build && pnpm start`
+   * warns on every local run, and warnings people are trained to ignore are
+   * how real ones get missed.
+   */
+  ...(process.env.BUILD_STANDALONE === 'true' ? { output: 'standalone' as const } : {}),
   reactStrictMode: true,
   poweredByHeader: false,
   images: {

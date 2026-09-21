@@ -322,6 +322,25 @@ Carts, sessions and reservations are hard-deleted or expired; keeping them would
 Security headers (CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`) are set
 centrally in `next.config.ts` / middleware.
 
+### Where the authorization boundary actually is
+
+Three layers, and only one of them is load-bearing:
+
+1. **Edge middleware** redirects anonymous traffic away from `/account` and `/admin` and marks
+   private responses `no-store`. It runs on the Edge runtime with **no database access**, so it can
+   only observe that a session cookie _exists_ — not that it is valid, unexpired, or privileged. It
+   is a cheap first gate, not a control.
+2. **The layout** (`app/admin/layout.tsx`) resolves the session from Postgres and checks the role.
+   This is where every admin page passes through, so a new page cannot be added without it.
+3. **Each action** independently re-checks a _specific permission_. Hiding a button is presentation;
+   this is the authorization. `order:refund` is deliberately withheld from `STAFF`, so a staff
+   member who crafts the request still cannot move money.
+
+Guest surfaces get the same treatment by a different mechanism: a guest has no account to scope an
+order to, so checkout issues an httpOnly **claim cookie** binding the order to the browser that
+started it. Abandoning a checkout and viewing a confirmation both require that claim — an order id
+alone is never enough, because order numbers appear in emails and on packing slips.
+
 ---
 
 ## 6. SEO & performance
@@ -379,7 +398,28 @@ insertion point above; none is built speculatively.
 
 ---
 
-## 10. Explicit assumptions
+## 10. What shipped against this plan
+
+Everything in sections 1–8 is built and exercised by tests. Four decisions were
+revised while implementing, and the reasons are worth recording:
+
+| Planned                              | Shipped                                                                                                                           | Why                                                                                                                                                                                 |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tags excluded from the search vector | Tags folded in via `array_to_tsvector`, with a CHECK constraint stating the non-empty-lowercase requirement that function imposes | Searching "diamond ring" missed a diamond solitaire whose prose never used the word. The constraint makes the hazard explicit rather than latent.                                   |
+| `similarity()` for typo tolerance    | `word_similarity()`                                                                                                               | `similarity()` scores a query against the _whole_ name, so "emerld" against "Vaani Emerald Pendant" is 0.21 — a miss. `word_similarity` scores the best matching word: 0.57.        |
+| One login rate limit                 | Split into a generous per-IP ceiling and a strict per-account limit                                                               | A tight per-IP limit locks out everyone behind an office or carrier NAT long before it troubles an attacker with proxies. The limit that defends an account belongs on the account. |
+| Guest order scoping unspecified      | An httpOnly checkout claim cookie                                                                                                 | A guest has no account to scope an order to, and an order number alone is not a secret — it appears in emails and on packing slips.                                                 |
+
+Two production-readiness gaps surfaced only by running the thing:
+
+- `revalidateTag` throws outside a request context, so cache invalidation could
+  roll back the admin write that had just succeeded. It is now best-effort.
+- The production env guard made `pnpm build && pnpm start` impossible locally,
+  which is exactly how such guards end up weakened. It now also checks the app's
+  own origin: a deployment answering on localhost is not a production
+  deployment.
+
+## 11. Explicit assumptions
 
 1. Single storefront, single currency (**INR**), shipping within India.
 2. **GST 3%** on jewellery — configurable per category, with an environment-level default.

@@ -68,6 +68,9 @@ export function WishlistButton({
         onClick={handleToggle}
         disabled={isPending}
         aria-pressed={inWishlist}
+        // The visible text is just "Save" to keep the button compact, but a page
+        // carries several of these — the accessible name has to say which piece.
+        aria-label={label}
         className={cn(
           'border-ink-900/25 hover:border-ink-900 inline-flex h-11 items-center justify-center gap-2 border px-5 text-[0.75rem] tracking-[0.16em] uppercase transition-colors disabled:opacity-50',
           className,

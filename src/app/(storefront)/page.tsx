@@ -62,28 +62,23 @@ export default async function HomePage() {
 
       <section className="container-page py-16 lg:py-24" aria-labelledby="shop-by-category">
         <SectionHeader
+          id="shop-by-category"
           eyebrow="Find your piece"
           title="Shop by category"
           href="/shop"
           linkLabel="All jewellery"
-          className="[&>div>h2]:scroll-mt-24"
         />
-        <h2 id="shop-by-category" className="sr-only">
-          Shop by category
-        </h2>
         <CategoryTiles categories={navigation.categories} />
       </section>
 
       <section className="container-page pb-16 lg:pb-24" aria-labelledby="new-arrivals">
         <SectionHeader
+          id="new-arrivals"
           eyebrow="Just landed"
           title="New arrivals"
           description="The most recent pieces to leave the workshop."
           href="/shop?sort=newest"
         />
-        <h2 id="new-arrivals" className="sr-only">
-          New arrivals
-        </h2>
         <Suspense fallback={<ProductGridSkeleton count={4} />}>
           <NewArrivals />
         </Suspense>
@@ -91,27 +86,23 @@ export default async function HomePage() {
 
       <section className="container-page pb-16 lg:pb-24" aria-labelledby="collections">
         <SectionHeader
+          id="collections"
           eyebrow="Curated"
           title="Our collections"
           href="/collections"
           linkLabel="All collections"
         />
-        <h2 id="collections" className="sr-only">
-          Our collections
-        </h2>
         <CollectionFeature collections={collections} />
       </section>
 
       <section className="container-page pb-16 lg:pb-24" aria-labelledby="best-sellers">
         <SectionHeader
+          id="best-sellers"
           eyebrow="Most loved"
           title="Best sellers"
           description="What our customers have chosen most often over the last three months."
           href="/shop?sort=popular"
         />
-        <h2 id="best-sellers" className="sr-only">
-          Best sellers
-        </h2>
         <Suspense fallback={<ProductGridSkeleton count={4} />}>
           <BestSellers />
         </Suspense>
@@ -137,14 +128,12 @@ export default async function HomePage() {
 
       <section className="container-page py-16 lg:py-24" aria-labelledby="featured">
         <SectionHeader
+          id="featured"
           eyebrow="From the atelier"
           title="Featured jewellery"
           description="Pieces we are particularly proud of this season."
           href="/shop"
         />
-        <h2 id="featured" className="sr-only">
-          Featured jewellery
-        </h2>
         <Suspense fallback={<ProductGridSkeleton count={4} />}>
           <Featured />
         </Suspense>

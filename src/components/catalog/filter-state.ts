@@ -1,21 +1,50 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FACET_CODES } from '@/server/catalog/schema';
+
+const CLEARABLE_KEYS = [
+  ...FACET_CODES,
+  'brand',
+  'audience',
+  'minPrice',
+  'maxPrice',
+  'inStock',
+  'onSale',
+];
 
 /**
  * Filter URL manipulation.
  *
  * Filters live entirely in the query string — there is no client filter store
- * to drift out of sync with the address bar. Every change rewrites the URL and
- * lets the server re-render, which is also what makes a filtered view
+ * to drift out of sync with the address bar. That is what makes a filtered view
  * shareable and crawlable.
+ *
+ * The one thing kept locally is an *optimistic* copy of the params, applied the
+ * instant a control is used and discarded as soon as the router catches up.
+ * Without it a checkbox stays visually unchecked until the server responds,
+ * which on a slow connection reads as "the filter is broken" and invites a
+ * second click.
  */
 export function useFilterNavigation() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
+  const committed = searchParams.toString();
+  const [optimistic, setOptimistic] = useState(committed);
+
+  // The server has caught up: stop overriding it.
+  useEffect(() => {
+    setOptimistic(committed);
+  }, [committed]);
+
+  const effective = useMemo(
+    () => new URLSearchParams(isPending ? optimistic : committed),
+    [isPending, optimistic, committed],
+  );
 
   const push = useCallback(
     (mutate: (params: URLSearchParams) => void) => {
@@ -24,8 +53,13 @@ export function useFilterNavigation() {
       // Any filter change invalidates the current page number.
       params.delete('page');
       params.sort();
+
       const query = params.toString();
-      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      setOptimistic(query);
+
+      startTransition(() => {
+        router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      });
     },
     [pathname, router, searchParams],
   );
@@ -56,24 +90,18 @@ export function useFilterNavigation() {
 
   const clearAll = useCallback(() => {
     push((params) => {
-      for (const key of [
-        ...FACET_CODES,
-        'brand',
-        'audience',
-        'minPrice',
-        'maxPrice',
-        'inStock',
-        'onSale',
-      ]) {
-        params.delete(key);
-      }
+      for (const key of CLEARABLE_KEYS) params.delete(key);
     });
   }, [push]);
 
   const isSelected = useCallback(
-    (key: string, value: string) => (searchParams.get(key)?.split(',') ?? []).includes(value),
-    [searchParams],
+    (key: string, value: string) => (effective.get(key)?.split(',') ?? []).includes(value),
+    // `effective` is rebuilt each render from these two, which is what makes
+    // the optimistic value visible immediately.
+    [effective],
   );
 
-  return { push, toggleValue, setValue, clearAll, isSelected, searchParams };
+  const hasFlag = useCallback((key: string) => effective.get(key) != null, [effective]);
+
+  return { push, toggleValue, setValue, clearAll, isSelected, hasFlag, isPending, searchParams };
 }

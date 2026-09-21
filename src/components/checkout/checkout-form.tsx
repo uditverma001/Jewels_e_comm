@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Check, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -444,13 +445,13 @@ export function CheckoutForm({
             <div className="text-sm text-stone-600">
               <p>
                 By paying you agree to our{' '}
-                <a href="/legal/terms" className="text-ink-900 underline underline-offset-4">
+                <Link href="/legal/terms" className="text-ink-900 underline underline-offset-4">
                   terms
-                </a>{' '}
+                </Link>{' '}
                 and{' '}
-                <a href="/help/returns" className="text-ink-900 underline underline-offset-4">
+                <Link href="/help/returns" className="text-ink-900 underline underline-offset-4">
                   returns policy
-                </a>
+                </Link>
                 .
               </p>
             </div>

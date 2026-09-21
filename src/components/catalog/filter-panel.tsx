@@ -150,16 +150,23 @@ export function FilterPanel({
   priceBounds: PriceBounds;
   activeCount: number;
 }) {
-  const { toggleValue, setValue, clearAll, isSelected } = useFilterNavigation();
+  const { toggleValue, setValue, clearAll, isSelected, hasFlag } = useFilterNavigation();
 
-  // Groups the customer has already used start open, so their current
-  // selection is visible without hunting for it.
-  const defaultOpen = [
-    'price',
-    ...facets
-      .filter((facet) => filters.facets[facet.code as FacetCode]?.length)
-      .map((facet) => facet.code),
-  ];
+  // Price and the first two facet groups start open so the customer can see
+  // that filtering by metal and purity is even possible — a sidebar of
+  // collapsed headings hides its own usefulness. Any group the customer has
+  // already used is also open, so their current selection is never hidden.
+  const defaultOpen = Array.from(
+    new Set([
+      // Availability and price are what customers reach for first.
+      'availability',
+      'price',
+      ...facets.slice(0, 2).map((facet) => facet.code),
+      ...facets
+        .filter((facet) => filters.facets[facet.code as FacetCode]?.length)
+        .map((facet) => facet.code),
+    ]),
+  );
 
   return (
     <div className="space-y-1">
@@ -182,13 +189,13 @@ export function FilterPanel({
           <AccordionTrigger>Availability</AccordionTrigger>
           <AccordionContent>
             <CheckboxRow
-              checked={filters.inStockOnly}
-              onChange={() => setValue('inStock', filters.inStockOnly ? null : '1')}
+              checked={hasFlag('inStock')}
+              onChange={() => setValue('inStock', hasFlag('inStock') ? null : '1')}
               label="In stock only"
             />
             <CheckboxRow
-              checked={filters.onSaleOnly}
-              onChange={() => setValue('onSale', filters.onSaleOnly ? null : '1')}
+              checked={hasFlag('onSale')}
+              onChange={() => setValue('onSale', hasFlag('onSale') ? null : '1')}
               label="On sale"
             />
           </AccordionContent>
@@ -244,7 +251,7 @@ export function FilterPanel({
             {AUDIENCES.map((audience) => (
               <CheckboxRow
                 key={audience.value}
-                checked={filters.audiences.includes(audience.value)}
+                checked={isSelected('audience', audience.value)}
                 onChange={() => toggleValue('audience', audience.value)}
                 label={audience.label}
               />

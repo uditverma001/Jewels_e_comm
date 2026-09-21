@@ -1,0 +1,47 @@
+# Local production-like stack: the app as it ships, plus a database.
+#
+# `docker compose up` gives you the real image rather than `next dev`, which is
+# the only way to catch the class of bug that only appears in a production
+# build (RSC boundaries, env validation, standalone output).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aurelia
+      POSTGRES_PASSWORD: aurelia
+      POSTGRES_DB: aurelia
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aurelia']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_APP_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://aurelia:aurelia@db:5432/aurelia?schema=public
+      APP_URL: http://localhost:3000
+      # Local origin, so the development payment and storage drivers are
+      # permitted. A real deployment sets a public APP_URL and must therefore
+      # supply real provider credentials.
+      SESSION_SECRET: local-compose-secret-change-me-0123456789abcdef
+      PAYMENT_PROVIDER: fake
+      STORAGE_DRIVER: local
+      EMAIL_DRIVER: console
+    ports:
+      - '3000:3000'
+    command: sh -c "node_modules/.bin/prisma migrate deploy && node server.js"
+
+volumes:
+  db-data:

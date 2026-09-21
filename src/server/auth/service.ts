@@ -91,9 +91,10 @@ export async function register(input: RegisterInput): Promise<PublicUser> {
 }
 
 export async function login(input: LoginInput): Promise<PublicUser> {
+  // Broad per-IP ceiling, then the strict per-account limit that is the one
+  // actually defending the account being attacked.
   await enforceRateLimit('login');
-  // Per-account limit as well, so one attacker cannot spread attempts across IPs.
-  await enforceRateLimit('login', `account:${input.email}`);
+  await enforceRateLimit('loginAccount', `account:${input.email}`);
 
   const user = await db.user.findUnique({ where: { email: input.email } });
 
