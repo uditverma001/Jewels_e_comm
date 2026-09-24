@@ -167,3 +167,27 @@ export function orderStatusEmail(params: {
     text: `Hello ${params.firstName},\n\n${params.message}\n\nOrder ${params.orderNumber}: ${params.trackingUrl || params.orderUrl}`,
   };
 }
+
+export function backInStockEmail(params: {
+  to: string;
+  productName: string;
+  variantLabel: string;
+  productUrl: string;
+}): EmailMessage {
+  const piece = `${params.productName}${
+    params.variantLabel && params.variantLabel !== 'Default' ? ` — ${params.variantLabel}` : ''
+  }`;
+
+  const body = `
+    <p>Good news.</p>
+    <p><strong>${escapeHtml(piece)}</strong> is available again.</p>
+    ${button(params.productUrl, 'View the piece')}
+    <p style="color:#6d655c;font-size:13px">We hold nothing in reserve, so it is first come, first served. You asked to hear about this one piece — this is the only email you will get about it.</p>`;
+
+  return {
+    to: params.to,
+    subject: `${piece} is back in stock`,
+    html: layout('Back in stock', body),
+    text: `${piece} is available again.\n\n${params.productUrl}\n\nWe hold nothing in reserve, so it is first come, first served.`,
+  };
+}

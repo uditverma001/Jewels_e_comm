@@ -422,6 +422,32 @@ describe('CSRF origin guard', () => {
     requestContext.removeHeader('referer');
     await expect(assertSameOrigin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
+
+  /**
+   * The allowlist used to be built from the request's own `Host` and
+   * `X-Forwarded-Host` headers, which let a request vouch for itself. A browser
+   * cannot set either one cross-origin, so this was not reachable by CSRF, but
+   * anything reaching the app past the proxy could name its own origin and be
+   * believed.
+   */
+  it('does not let the Host header vouch for a foreign origin', async () => {
+    requestContext.setHeader('origin', 'https://evil.example');
+    requestContext.setHeader('host', 'evil.example');
+    await expect(assertSameOrigin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('does not let X-Forwarded-Host vouch for a foreign origin', async () => {
+    requestContext.setHeader('origin', 'https://evil.example');
+    requestContext.setHeader('x-forwarded-host', 'evil.example');
+    await expect(assertSameOrigin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('falls back to Referer when Origin is absent', async () => {
+    const appOrigin = new URL(process.env.APP_URL ?? 'http://localhost:3000').origin;
+    requestContext.removeHeader('origin');
+    requestContext.setHeader('referer', `${appOrigin}/cart`);
+    await expect(assertSameOrigin()).resolves.toBeUndefined();
+  });
 });
 
 describe('authorization', () => {

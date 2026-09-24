@@ -21,6 +21,9 @@ export function ProductGrid({
       className={cn(
         'grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 lg:gap-y-14',
         columns === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+        // Cards settle in as the grid scrolls into view, each a beat after the
+        // one before it. Pure CSS — see `reveal-stagger` in globals.css.
+        'reveal-stagger',
         className,
       )}
     >
@@ -60,6 +63,10 @@ export function ProductRail({
         // keeps the interaction native and the bundle empty.
         'no-scrollbar -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2',
         'md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 lg:grid-cols-4',
+        // Only from `md`: on mobile this is a horizontal scroller, and a
+        // scroll-linked reveal inside a horizontal scroller fires on the wrong
+        // axis — cards would sit faded until nudged sideways.
+        'md:reveal-stagger',
         className,
       )}
     >

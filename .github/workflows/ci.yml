@@ -73,6 +73,13 @@ jobs:
       - name: Test
         run: pnpm exec vitest run
 
+      - name: Audit dependencies
+        # Advisories appear between builds, so this must not be able to fail a
+        # release of code that did not change. It reports and moves on; the
+        # signal is the annotation, not a red build.
+        continue-on-error: true
+        run: pnpm audit --audit-level=moderate
+
   e2e:
     name: End-to-end
     runs-on: ubuntu-latest
@@ -122,7 +129,10 @@ jobs:
         run: pnpm build
 
       - name: Run end-to-end tests
-        run: pnpm exec playwright test --project=chromium
+        # Both projects. The `mobile` project (Pixel 7) runs on the same
+        # Chromium binary, and leaving it out of CI is how the mobile-only
+        # failures this suite now covers went unnoticed in the first place.
+        run: pnpm exec playwright test
 
       - uses: actions/upload-artifact@v4
         if: failure()

@@ -12,8 +12,19 @@ export interface Crumb {
  *
  * The visible trail and the JSON-LD are generated from the same array, so the
  * markup cannot claim a hierarchy the page does not show.
+ *
+ * `structuredData` is off for pages that are `noindex` — a crawler will never
+ * read the markup there, and emitting an inline <script> on those routes would
+ * collide with the strict, nonce-based CSP they are served under. See
+ * `src/server/security/csp.ts`.
  */
-export function Breadcrumbs({ crumbs }: { crumbs: Crumb[] }) {
+export function Breadcrumbs({
+  crumbs,
+  structuredData = true,
+}: {
+  crumbs: Crumb[];
+  structuredData?: boolean;
+}) {
   if (crumbs.length === 0) return null;
 
   const schema = {
@@ -56,7 +67,9 @@ export function Breadcrumbs({ crumbs }: { crumbs: Crumb[] }) {
         </ol>
       </nav>
 
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />
+      {structuredData ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(schema) }} />
+      ) : null}
     </>
   );
 }

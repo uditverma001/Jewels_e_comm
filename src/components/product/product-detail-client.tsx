@@ -16,9 +16,11 @@ import { rememberViewedProduct } from './recently-viewed-store';
 export function ProductDetailClient({
   product,
   inWishlist,
+  customerEmail,
 }: {
   product: ProductDetail;
   inWishlist: boolean;
+  customerEmail?: string;
 }) {
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
 
@@ -40,6 +42,7 @@ export function ProductDetailClient({
           <PurchasePanel
             product={product}
             inWishlist={inWishlist}
+            customerEmail={customerEmail}
             onVariantChange={setActiveVariantId}
           />
         </div>

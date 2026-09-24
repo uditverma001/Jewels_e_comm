@@ -19,12 +19,36 @@ const serverSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
     APP_URL: z.string().url(),
+    /**
+     * Extra hostnames this deployment legitimately answers to, comma
+     * separated (e.g. "https://staging.example.com,https://www.example.com").
+     * Consulted by the CSRF origin check; leave empty for a single domain.
+     */
+    ADDITIONAL_ORIGINS: z.string().optional(),
     DATABASE_URL: z.string().url(),
 
     SESSION_SECRET: z
       .string()
       .min(32, 'SESSION_SECRET must be at least 32 characters of random data'),
     SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+
+    /**
+     * Bearer token for `/api/maintenance`.
+     *
+     * Separate from `SESSION_SECRET` on purpose. This value has to be pasted
+     * into a scheduler's configuration, which is a different — and usually
+     * more exposed — place than the application's own secret store: cron UIs,
+     * CI variables and job logs all tend to see it. Sharing one secret across
+     * those two blast radii means a leak from the scheduler also hands over
+     * the key used to sign payments in development.
+     *
+     * Optional so existing deployments keep booting; production requires it
+     * below.
+     */
+    MAINTENANCE_TOKEN: z
+      .string()
+      .min(32, 'MAINTENANCE_TOKEN must be at least 32 characters of random data')
+      .optional(),
 
     DEFAULT_TAX_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(300),
     CURRENCY: z.literal('INR').default('INR'),
@@ -125,6 +149,22 @@ const serverSchema = z
         code: z.ZodIssueCode.custom,
         path: ['SESSION_SECRET'],
         message: 'SESSION_SECRET still holds the development placeholder',
+      });
+    }
+    if (!cfg.MAINTENANCE_TOKEN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MAINTENANCE_TOKEN'],
+        message:
+          'MAINTENANCE_TOKEN is required in production — generate one with `openssl rand -base64 32`',
+      });
+    }
+    if (cfg.MAINTENANCE_TOKEN && cfg.MAINTENANCE_TOKEN === cfg.SESSION_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MAINTENANCE_TOKEN'],
+        message:
+          'MAINTENANCE_TOKEN must not be the same value as SESSION_SECRET — the point is that a leak of one does not compromise the other',
       });
     }
   });

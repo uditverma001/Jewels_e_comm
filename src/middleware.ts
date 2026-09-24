@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { buildCsp, needsStrictCsp } from '@/server/security/csp';
 
 /**
  * Edge middleware.
@@ -30,7 +31,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(signIn);
   }
 
-  const response = NextResponse.next();
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+
+  // A nonce is minted only for the routes that take the strict policy. Minting
+  // one everywhere would force every page to render per request, which is the
+  // cost this split exists to avoid.
+  const nonce = needsStrictCsp(pathname) ? crypto.randomUUID().replaceAll('-', '') : undefined;
+  const csp = buildCsp({ nonce, isDevelopment });
+
+  const requestHeaders = new Headers(request.headers);
+  if (nonce) {
+    // Next reads the nonce back out of this header to stamp its own bootstrap
+    // scripts; `x-nonce` is what our own inline <script> tags read.
+    requestHeaders.set('content-security-policy', csp);
+    requestHeaders.set('x-nonce', nonce);
+  }
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', csp);
 
   // Private surfaces must not be stored by a shared cache. Checkout is
   // included because a cached checkout page is somebody else's basket.

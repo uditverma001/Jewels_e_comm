@@ -44,6 +44,13 @@ export const RATE_LIMITS = {
   review: { limit: 6, windowSeconds: 3600 },
   newsletter: { limit: 5, windowSeconds: 3600 },
   search: { limit: 120, windowSeconds: 60 },
+  // The recently-viewed rail hydrates from ids held in the browser. Public
+  // data, but it is an unauthenticated POST that runs a join per call, so it
+  // should not be free to loop on.
+  productHydrate: { limit: 90, windowSeconds: 60 },
+  // Back-in-stock requests. Applied per browser AND per target address: this
+  // is the one place a visitor can cause mail to be sent to someone else.
+  stockNotification: { limit: 6, windowSeconds: 600 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

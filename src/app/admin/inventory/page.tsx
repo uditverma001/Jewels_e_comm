@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { Badge } from '@/components/ui/badge';
 import { AdminPanel, EmptyState, Td, Th } from '@/components/admin/data-table';
 import { StockEditor } from '@/components/admin/stock-editor';
+import { countWaiting } from '@/server/notifications/stock';
 
 export const metadata: Metadata = { title: 'Inventory' };
 
@@ -38,6 +39,10 @@ export default async function AdminInventoryPage() {
     },
   });
 
+  // How many customers asked to hear when each piece returns. This is the
+  // number that turns "restock this sometime" into "restock this first".
+  const waiting = await countWaiting(rows.map((row) => row.variantId));
+
   const critical = rows.filter(
     (row) => !row.allowBackorder && row.quantity - row.reserved <= row.lowStockThreshold,
   );
@@ -60,6 +65,7 @@ export default async function AdminInventoryPage() {
                 <Th className="text-right">Reserved</Th>
                 <Th className="text-right">Available</Th>
                 <Th>State</Th>
+                <Th className="text-right">Waiting</Th>
                 <Th className="text-right">Set stock</Th>
               </tr>
             </thead>
@@ -67,6 +73,7 @@ export default async function AdminInventoryPage() {
               {rows.map((row) => {
                 const available = Math.max(0, row.quantity - row.reserved);
                 const low = !row.allowBackorder && available <= row.lowStockThreshold;
+                const waitingCount = waiting.get(row.variantId) ?? 0;
 
                 return (
                   <tr key={row.variantId} className="hover:bg-ivory-100 transition-colors">
@@ -99,6 +106,20 @@ export default async function AdminInventoryPage() {
                         <Badge variant="warning">Low</Badge>
                       ) : (
                         <Badge variant="success">In stock</Badge>
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {waitingCount > 0 ? (
+                        <span
+                          className="text-ink-900 font-medium"
+                          title={`${waitingCount} ${
+                            waitingCount === 1 ? 'customer is' : 'customers are'
+                          } waiting to be emailed when this is back`}
+                        >
+                          {waitingCount}
+                        </span>
+                      ) : (
+                        <span className="text-stone-400">—</span>
                       )}
                     </Td>
                     <Td className="text-right">

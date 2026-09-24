@@ -34,6 +34,13 @@ the whole domain liftable into a standalone service later.
   processing so replays are no-ops.
 - **Stock is protected by one conditional `UPDATE`**, not by read-then-write.
   Anything that decrements inventory must be atomic in a single statement.
+- **Authorization is written as "may this caller act", never as a list of
+  rejections.** `a && b && a !== b` reads like a check and collapses to `false`
+  the moment either side is null. `callerOwnsOrder` in `server/payments` is the
+  shape to copy.
+- **Side effects go outside the transaction.** Emails, provider calls and cache
+  invalidation happen after the commit — a mail provider being down must never
+  roll back an order.
 - **Orders are immutable snapshots.** Editing a product must never change what
   an old order says.
 - **Scope every account query by owner in the `where` clause.** Never fetch by
@@ -54,6 +61,11 @@ presentation, not authorization.
 
 **A new facet** — it is data, not a migration: add an `Attribute` and its
 `AttributeValue` rows, then add the code to `FACET_CODES`.
+
+**Anything that sends mail on a visitor's say-so** — rate limit it twice: once
+per browser and once per target address. A rotating IP otherwise turns the
+endpoint into a way to bury somebody's inbox. `notifyWhenBackInStockAction` is
+the worked example.
 
 **A new product field that customers filter on** — think twice. Filterable
 things belong in the attribute tables; display-only things belong in

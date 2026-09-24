@@ -318,9 +318,34 @@ Carts, sessions and reservations are hard-deleted or expired; keeping them would
 | Payment spoofing              | HMAC verification on callbacks _and_ webhooks, against the raw body; orders are only marked paid from a verified provider event.  |
 | Brute force / abuse           | Rate limits on login, registration, password reset, coupon application and checkout.                                              |
 | Secret exposure               | Zod-validated env; only `NEXT_PUBLIC_*` reaches the browser; `.env.example` holds no real values.                                 |
+| Secret blast radius           | `MAINTENANCE_TOKEN` is separate from `SESSION_SECRET` and boot fails if they match — the scheduler's copy leaks more easily.      |
+| Origin spoofing               | The CSRF allowlist comes from `APP_URL` + `ADDITIONAL_ORIGINS` only, never from the request's own `Host`/`X-Forwarded-Host`.      |
 
-Security headers (CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`) are set
-centrally in `next.config.ts` / middleware.
+Security headers are split by what can vary: the ones that are identical on every response
+(`HSTS`, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`) stay
+declarative in `next.config.ts`; the Content-Security-Policy is built per request in
+`src/middleware.ts` from `src/server/security/csp.ts`.
+
+### Why there are two Content-Security-Policies
+
+A nonce is the only thing that makes a CSP actually stop XSS — a policy containing
+`'unsafe-inline'` permits exactly what an injection needs. But Next.js can only stamp a nonce into
+its bootstrap scripts while rendering, so **any page issued a nonce renders per request** and loses
+its ISR cache.
+
+That cache is the difference between a fast catalogue and a slow one, and it is worth nothing on the
+pages that matter most for this threat. So:
+
+- **`/account`, `/admin`, `/checkout`, `/cart`, `/sign-in`, `/register`** — one customer's data and
+  all the privileged actions. These are already `force-dynamic`, so a nonce costs nothing. They get
+  `'nonce-…' 'strict-dynamic'` and **no** `'unsafe-inline'`.
+- **Everything else** — the ISR-cached catalogue. Keeps `'unsafe-inline'` for Next's bootstrap, and
+  still denies `eval`, plugins, framing and off-origin form posts.
+
+This is a trade, not a claim that the public pages are protected. What bounds the risk there is that
+they render admin-authored catalogue copy and React-escaped review text — no customer-supplied HTML
+reaches the DOM anywhere in the app. `'unsafe-eval'` is emitted in development only, for React
+Refresh; `e2e/security.spec.ts` asserts it never ships.
 
 ### Where the authorization boundary actually is
 
@@ -419,7 +444,49 @@ Two production-readiness gaps surfaced only by running the thing:
   own origin: a deployment answering on localhost is not a production
   deployment.
 
-## 11. Explicit assumptions
+## 11. Phase 2: what changed
+
+A second pass over the shipped application — security review, accessibility,
+motion, and one new feature. `SECURITY-REVIEW.md` is the full assessment.
+
+**Security.** Nine findings, all fixed with regression tests; each negative test
+was run against the original code to confirm it fails there. The substantive one
+was an authorization gate written as a list of rejections
+(`a && b && a !== b`), which collapses to `false` whenever either side is null
+— it let an anonymous caller past the ownership check on a customer's order.
+Production stopped those calls anyway, at the signature check below it, which is
+precisely why it needed fixing: a gate that works only because of what happens
+after it stops working the moment that other thing moves.
+
+**Accessibility.** `axe-core` now runs over eleven pages at WCAG 2.1 A and AA on
+both viewports, failing the build on any violation. It found that the muted text
+token was 3.47:1 sitewide — under the 4.5:1 floor on every page — and that two
+status colours were worse. Every token was re-derived by measurement against
+each background it actually composites over.
+
+**Motion.** Scroll-linked reveals built on `animation-timeline: view()` rather
+than an IntersectionObserver. A JS reveal has to start its content hidden, so a
+script failure or a strict CSP leaves the page blank; this is decoration on
+content that is already painted, and browsers without scroll-driven animations
+simply get a fade. `prefers-reduced-motion` detaches the timeline — collapsing
+`animation-duration`, which the global rule does, has no effect on an animation
+whose progress comes from scroll position rather than from time.
+
+**Back-in-stock alerts.** Deliberately one-shot: a request is consumed when the
+email goes out. No standing subscription means no unsubscribe token to mint, no
+unsubscribe route to secure, and no address retained after it has served its
+purpose. It is also the only place a visitor can make the server mail somebody
+else, so it is rate limited per browser _and_ per target address.
+
+**Mobile.** The `mobile` Playwright project existed but CI only ever ran
+`--project=chromium`, so it had never been green. Running it surfaced three
+failures, all fixture leakage across the two projects rather than product bugs —
+an address cap reached by accumulated test data, a wishlist left populated, a
+login budget spent twice over. CI now runs both projects.
+
+---
+
+## 12. Explicit assumptions
 
 1. Single storefront, single currency (**INR**), shipping within India.
 2. **GST 3%** on jewellery — configurable per category, with an environment-level default.

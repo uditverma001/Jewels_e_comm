@@ -33,6 +33,42 @@ import type { VerifyPaymentInput } from '@/server/checkout/schema';
  */
 
 /**
+ * Who is asking to confirm a payment.
+ *
+ * Both facts are needed because an order has two legitimate kinds of owner: a
+ * signed-in customer, and the anonymous browser that started a guest checkout
+ * (proved by the httpOnly claim cookie).
+ */
+export interface CheckoutActor {
+  userId: string | null;
+  /** True when this browser holds the checkout claim for *this* order. */
+  hasCheckoutClaim: boolean;
+}
+
+/**
+ * Deny by default.
+ *
+ * Written as a positive "may this caller act on this order" rather than a list
+ * of rejection cases, because the rejection form has a null-shaped hole in it:
+ * `order.userId && actorUserId && order.userId !== actorUserId` silently
+ * permits an anonymous caller against a customer's order, and a signed-in
+ * caller against a guest's, since a null on either side makes the whole
+ * condition false. Every such call was in fact still stopped further down by
+ * the signature and payment-row binding, but an authorization check that only
+ * works because of what happens after it is not an authorization check.
+ */
+function callerOwnsOrder(orderUserId: string | null, actor: CheckoutActor): boolean {
+  // A guest order is owned solely by the browser that started it.
+  if (!orderUserId) return actor.hasCheckoutClaim;
+
+  // A customer's order: normally the customer themselves. The claim cookie is
+  // accepted as well so that a session expiring during the payment redirect
+  // does not strand someone who has already been charged — it is httpOnly and
+  // names this exact order, so holding it means having started this checkout.
+  return orderUserId === actor.userId || actor.hasCheckoutClaim;
+}
+
+/**
  * Handle the browser's return from checkout.
  *
  * Verifies the HMAC, then fetches the provider's own record and acts on that.
@@ -41,7 +77,7 @@ import type { VerifyPaymentInput } from '@/server/checkout/schema';
  */
 export async function verifyCheckoutCallback(
   input: VerifyPaymentInput,
-  actorUserId: string | null,
+  actor: CheckoutActor,
 ): Promise<{ status: 'paid' | 'pending' | 'failed'; orderNumber: string }> {
   const order = await db.order.findUnique({
     where: { id: input.orderId },
@@ -49,9 +85,7 @@ export async function verifyCheckoutCallback(
   });
   if (!order) throw notFound('We could not find that order.');
 
-  // A guest order has no userId; a signed-in customer may only confirm their
-  // own. Both cases still require a valid provider signature below.
-  if (order.userId && actorUserId && order.userId !== actorUserId) {
+  if (!callerOwnsOrder(order.userId, actor)) {
     throw forbidden();
   }
 

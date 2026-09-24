@@ -190,7 +190,11 @@ export default async function ProductPage({ params }: { params: Params }) {
         <Breadcrumbs crumbs={crumbs} />
 
         <div className="pt-2 pb-14">
-          <ProductDetailClient product={product} inWishlist={wishlistIds.has(product.id)} />
+          <ProductDetailClient
+            product={product}
+            inWishlist={wishlistIds.has(product.id)}
+            customerEmail={user?.email}
+          />
         </div>
       </div>
 

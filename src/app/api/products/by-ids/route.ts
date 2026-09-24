@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { findProductsByIds } from '@/server/catalog/service';
+import { enforceRateLimit } from '@/server/rate-limit';
+import { isAppError } from '@/server/errors';
 
 /**
  * Hydrate product cards from ids held in the browser (the recently-viewed rail).
@@ -17,6 +19,15 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ products: [] }, { status: 400 });
+  }
+
+  try {
+    await enforceRateLimit('productHydrate');
+  } catch (error) {
+    if (isAppError(error) && error.code === 'RATE_LIMITED') {
+      return NextResponse.json({ products: [] }, { status: 429 });
+    }
+    throw error;
   }
 
   const products = await findProductsByIds(parsed.data.ids);
