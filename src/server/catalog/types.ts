@@ -1,3 +1,5 @@
+import type { PriceBreakdownView } from './price-breakdown';
+
 import type { ProductStatus, TargetAudience } from '@prisma/client';
 
 export interface ProductCard {
@@ -113,4 +115,13 @@ export interface ProductDetail {
   attributes: { code: string; name: string; value: string }[];
 
   totalAvailable: number;
+  /** GST rate for this product, resolved the same way checkout resolves it. */
+  taxRateBps: number;
+  /**
+   * Per-variant price breakdown, keyed by variant id. A variant is absent when
+   * it has no components, or when the ones it has do not sum to its price —
+   * see `server/catalog/price-breakdown.ts` for why that is a silence rather
+   * than an error.
+   */
+  priceBreakdowns: Record<string, PriceBreakdownView>;
 }

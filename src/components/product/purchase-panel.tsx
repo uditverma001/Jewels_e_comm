@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { Price } from '@/components/product/price';
 import { WishlistButton } from '@/components/product/wishlist-button';
 import { BackInStock } from '@/components/product/back-in-stock';
+import { PriceBreakdown } from '@/components/product/price-breakdown';
+import { SizeGuide } from '@/components/product/size-guide';
+import { DeliveryCheck } from '@/components/product/delivery-check';
 import type { ProductDetail, VariantView } from '@/server/catalog/types';
 import { cn, pluralise } from '@/lib/utils';
 
@@ -25,12 +28,19 @@ export function PurchasePanel({
   product,
   inWishlist,
   customerEmail,
+  assurances,
   onVariantChange,
 }: {
   product: ProductDetail;
   inWishlist: boolean;
   /** Prefills the back-in-stock form for a signed-in customer. */
   customerEmail?: string;
+  /**
+   * Rendered under the buy buttons. Passed in as a slot rather than imported
+   * so it stays a Server Component — it is static text and should not cost the
+   * customer a byte of JavaScript.
+   */
+  assurances?: React.ReactNode;
   onVariantChange?: (variantId: string | null) => void;
 }) {
   const router = useRouter();
@@ -115,6 +125,27 @@ export function PurchasePanel({
     });
   }
 
+  /*
+   * The breakdown must always explain the price shown directly above it.
+   *
+   * With a size chosen that is the selected variant's. With none chosen — a
+   * ring shows "from ₹X" until you pick — it is the variant that *set* that
+   * headline price, found by matching the price rather than by assuming it is
+   * the first or cheapest in the list. Showing some other variant's working
+   * next to this number is exactly the mismatch this feature exists to stop.
+   */
+  const headlineVariant = useMemo(
+    () =>
+      selectedVariant ??
+      product.variants.find((variant) => variant.priceMinor === product.priceMinor) ??
+      null,
+    [selectedVariant, product.variants, product.priceMinor],
+  );
+
+  const activeBreakdown = headlineVariant
+    ? (product.priceBreakdowns[headlineVariant.id] ?? null)
+    : null;
+
   const displayPrice = selectedVariant?.priceMinor ?? product.priceMinor;
   const displayCompareAt = selectedVariant?.compareAtPriceMinor ?? product.compareAtPriceMinor;
   const available = selectedVariant?.availableQuantity ?? product.totalAvailable;
@@ -129,15 +160,34 @@ export function PurchasePanel({
         showSavings
       />
 
-      <p className="text-xs text-stone-500">Inclusive of GST. Shipping calculated at checkout.</p>
+      {/*
+       * GST is added on top at checkout — `priceOrder` computes
+       * `total = subtotal - discount + tax + shipping`. This line used to read
+       * "Inclusive of GST", which meant the page showed one number and the
+       * checkout charged a larger one. Saying so plainly, and naming the rate,
+       * is the minimum; the breakup below does the arithmetic.
+       */}
+      <p className="text-xs text-stone-500">
+        Plus {(product.taxRateBps / 100).toFixed(product.taxRateBps % 100 ? 2 : 0)}% GST. Shipping
+        calculated at checkout.
+      </p>
+
+      {activeBreakdown ? <PriceBreakdown breakdown={activeBreakdown} /> : null}
 
       {product.options.map((option) => (
         <fieldset key={option.id}>
-          <legend className="mb-2.5 flex w-full items-baseline justify-between">
+          <legend className="mb-2.5 flex w-full items-baseline justify-between gap-3">
             <span className="text-[0.6875rem] font-medium tracking-[0.14em] text-stone-600 uppercase">
               {option.name}
             </span>
-            {selectedVariant ? (
+            {/*
+             * The guide sits beside the picker, not in the footer: size is the
+             * commonest reason a ring is returned, and a customer resolves it
+             * while choosing rather than later.
+             */}
+            {isRingSize(option.name) ? (
+              <SizeGuide selectedSize={valueLabel(option, selection[option.id]) || undefined} />
+            ) : selectedVariant ? (
               <span className="text-ink-900 text-sm">
                 {valueLabel(option, selection[option.id])}
               </span>
@@ -199,7 +249,10 @@ export function PurchasePanel({
         ) : (
           <Badge variant="success">
             <Check className="h-3 w-3" aria-hidden="true" />
-            In stock — ships in 2–4 days
+            {/* Just "In stock". The delivery check below gives a real date for
+                the customer's own PIN code, and a generic "ships in 2–4 days"
+                beside it is either redundant or contradicting it. */}
+            In stock
           </Badge>
         )}
       </div>
@@ -312,6 +365,14 @@ export function PurchasePanel({
         </div>
       ) : null}
 
+      {assurances}
+
+      {/*
+       * Below the buy buttons, not above them: the customer decides they want
+       * the piece first, and the date is what turns "want" into "by Thursday".
+       */}
+      <DeliveryCheck />
+
       {selectedVariant ? (
         <p className="text-xs text-stone-500">
           SKU {selectedVariant.sku}
@@ -320,6 +381,10 @@ export function PurchasePanel({
       ) : null}
     </div>
   );
+}
+
+function isRingSize(optionName: string): boolean {
+  return /ring\s*size/i.test(optionName);
 }
 
 function initialSelection(product: ProductDetail): Record<string, string> {

@@ -211,12 +211,18 @@ export const PRODUCTS: SeedProduct[] = [
     imageCount: 3,
     optionName: 'Ring Size',
     variants: [
-      { optionValue: '6', skuSuffix: '06', weightGrams: 2.9, quantity: 4 },
-      { optionValue: '7', skuSuffix: '07', weightGrams: 3.1, quantity: 6 },
-      { optionValue: '8', skuSuffix: '08', weightGrams: 3.3, priceDeltaMinor: 60_000, quantity: 3 },
+      { optionValue: '12', skuSuffix: '12', weightGrams: 2.9, quantity: 4 },
+      { optionValue: '14', skuSuffix: '14', weightGrams: 3.1, quantity: 6 },
       {
-        optionValue: '9',
-        skuSuffix: '09',
+        optionValue: '16',
+        skuSuffix: '16',
+        weightGrams: 3.3,
+        priceDeltaMinor: 60_000,
+        quantity: 3,
+      },
+      {
+        optionValue: '18',
+        skuSuffix: '18',
         weightGrams: 3.5,
         priceDeltaMinor: 120_000,
         quantity: 0,
@@ -263,8 +269,11 @@ export const PRODUCTS: SeedProduct[] = [
     collection: 'everyday-fine',
     brand: 'mirai',
     audience: 'WOMEN',
-    basePriceMinor: 24_500_000,
-    compareAtPriceMinor: 28_000_000,
+    // 3.20ct of F–G/VS brilliants is roughly ₹6.9L of stones at 2026 rates, so
+    // anything near ₹2.45L would have been priced below the cost of its own
+    // diamonds. Raised so the published price breakup can be honest.
+    basePriceMinor: 98_500_000,
+    compareAtPriceMinor: 112_000_000,
     shortDescription: '3.2ct of graduated brilliants in a 18K white gold four-prong line setting.',
     description:
       'Fifty-two stones, graduated from 3.4mm at the clasp to 2.6mm at the centre, so the bracelet reads as a continuous line of light rather than a row of individual stones. Each link is articulated, which is what lets it lie flat on the wrist instead of standing proud.\n\nThe clasp is a box-and-tongue with a figure-eight safety — the only closure we will use on a piece at this value.',
@@ -351,7 +360,8 @@ export const PRODUCTS: SeedProduct[] = [
     collection: 'everyday-fine',
     brand: 'aurelia-atelier',
     audience: 'WOMEN',
-    basePriceMinor: 6_450_000,
+    // 0.50ct total of G/VS2 brilliants is about ₹1.08L of stones alone.
+    basePriceMinor: 15_500_000,
     shortDescription: 'Matched 0.25ct brilliants, four-prong, in 18K white gold.',
     description:
       'Studs are the hardest thing to buy well, because the difference between a good pair and a mediocre pair is invisible in a photograph. Ours are matched as a pair for colour and cut before they are set, and the posts are 0.9mm — slightly thicker than standard, so they do not bend.\n\nThe backs are push-on with a friction groove; screw-backs are available on request at no extra cost.',
@@ -433,11 +443,11 @@ export const PRODUCTS: SeedProduct[] = [
     imageCount: 2,
     optionName: 'Ring Size',
     variants: [
-      { optionValue: '9', skuSuffix: '09', weightGrams: 10.8, quantity: 3 },
-      { optionValue: '10', skuSuffix: '10', weightGrams: 11.2, quantity: 5 },
+      { optionValue: '18', skuSuffix: '18', weightGrams: 10.8, quantity: 3 },
+      { optionValue: '20', skuSuffix: '20', weightGrams: 11.2, quantity: 5 },
       {
-        optionValue: '11',
-        skuSuffix: '11',
+        optionValue: '22',
+        skuSuffix: '22',
         weightGrams: 11.7,
         priceDeltaMinor: 180_000,
         quantity: 2,
@@ -569,10 +579,10 @@ export const PRODUCTS: SeedProduct[] = [
     imageCount: 2,
     optionName: 'Ring Size',
     variants: [
-      { optionValue: '6', skuSuffix: '06', weightGrams: 4.1, quantity: 6 },
-      { optionValue: '8', skuSuffix: '08', weightGrams: 4.6, quantity: 8 },
+      { optionValue: '12', skuSuffix: '12', weightGrams: 4.1, quantity: 6 },
+      { optionValue: '16', skuSuffix: '16', weightGrams: 4.6, quantity: 8 },
       {
-        optionValue: '10',
+        optionValue: '20',
         skuSuffix: '10',
         weightGrams: 5.2,
         priceDeltaMinor: 340_000,
@@ -608,8 +618,8 @@ export const PRODUCTS: SeedProduct[] = [
     imageCount: 2,
     optionName: 'Ring Size',
     variants: [
-      { optionValue: '7', skuSuffix: '07', weightGrams: 12.4, quantity: 1 },
-      { optionValue: '8', skuSuffix: '08', weightGrams: 12.9, quantity: 2 },
+      { optionValue: '14', skuSuffix: '14', weightGrams: 12.4, quantity: 1 },
+      { optionValue: '16', skuSuffix: '16', weightGrams: 12.9, quantity: 2 },
     ],
     isFeatured: true,
   },

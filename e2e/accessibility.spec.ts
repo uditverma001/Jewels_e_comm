@@ -79,9 +79,9 @@ test('the filter drawer and its contents are accessible', async ({ page }) => {
 test('the sold-out state and its back-in-stock form are accessible', async ({ page }) => {
   await page.goto('/products/aurora-solitaire-ring', { waitUntil: 'networkidle' });
 
-  // Size 9 is seeded with zero stock, which swaps "Buy it now" for the
+  // Size 18 is seeded with zero stock, which swaps "Buy it now" for the
   // notify-me form — new UI that no other scan in this file reaches.
-  await page.getByRole('button', { name: '9 (sold out)', exact: true }).click();
+  await page.getByRole('button', { name: '18 (sold out)', exact: true }).click();
   await page.getByRole('button', { name: /email me when it is back/i }).click();
   await page.locator('#back-in-stock-email').waitFor();
 

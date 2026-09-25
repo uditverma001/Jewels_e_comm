@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addSingleVariantToBag, fillCheckoutDetails } from './helpers';
+import { addSingleVariantToBag, fillCheckoutDetails, SEED, signIn } from './helpers';
 
 /**
  * The purchase path. If only one test in this repository runs, it should be
@@ -103,4 +103,45 @@ test('an empty bag cannot reach checkout', async ({ page }) => {
   await page.goto('/checkout');
   await page.waitForURL(/\/cart$/, { timeout: 20_000 });
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your bag is empty');
+});
+
+test('a gift order reaches the packing bench with its card message', async ({ page }) => {
+  // As a guest, so `fillCheckoutDetails` types an address rather than meeting
+  // the saved-address picker a signed-in customer gets.
+  await addSingleVariantToBag(page, 'anaya-diamond-stud');
+  await page.goto('/checkout');
+
+  await fillCheckoutDetails(page);
+  await page.getByRole('button', { name: /continue to delivery/i }).click();
+
+  // The card message only exists once wrapping is asked for — a message on an
+  // unwrapped parcel has nothing to be written on.
+  await expect(page.locator('#checkout-gift-message')).toHaveCount(0);
+  await page.getByLabel(/this is a gift/i).check();
+
+  const message = `For Meera, always - ${Date.now()}`;
+  await page.fill('#checkout-gift-message', message);
+  await expect(page.getByText(/characters left/i)).toBeVisible();
+
+  await page.getByRole('button', { name: /continue to payment/i }).click();
+  await page.getByRole('button', { name: /^Pay / }).click();
+
+  await page.waitForURL(/\/checkout\/processing/, { timeout: 30_000 });
+  await page.getByRole('button', { name: /simulate successful payment/i }).click();
+  await page.waitForURL(/\/checkout\/confirmation\//, { timeout: 30_000 });
+
+  const orderNumber = decodeURIComponent(new URL(page.url()).pathname.split('/').pop()!);
+
+  // The operational half: the bench works from the admin order, and a gift
+  // instruction that does not reach it is a parcel posted with an invoice in
+  // it and no card.
+  await signIn(page, SEED.adminEmail, SEED.adminPassword);
+  await page.goto('/admin/orders');
+  await page.fill('#admin-search', orderNumber);
+  await page.getByRole('button', { name: /^search$/i }).click();
+  await page.getByRole('link', { name: orderNumber }).click();
+
+  await expect(page.getByRole('heading', { name: /gift order/i })).toBeVisible();
+  await expect(page.getByText(/no invoice or price anywhere/i)).toBeVisible();
+  await expect(page.getByText(message)).toBeVisible();
 });

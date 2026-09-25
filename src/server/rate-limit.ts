@@ -51,6 +51,9 @@ export const RATE_LIMITS = {
   // Back-in-stock requests. Applied per browser AND per target address: this
   // is the one place a visitor can cause mail to be sent to someone else.
   stockNotification: { limit: 6, windowSeconds: 600 },
+  // Pincode checks are cheap and read-only, but unauthenticated. Generous
+  // enough that someone typing, deleting and retyping never notices.
+  deliveryCheck: { limit: 40, windowSeconds: 300 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

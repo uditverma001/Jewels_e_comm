@@ -62,6 +62,16 @@ presentation, not authorization.
 **A new facet** — it is data, not a migration: add an `Attribute` and its
 `AttributeValue` rows, then add the code to `FACET_CODES`.
 
+**A price breakdown** — the components must sum to the ex-tax price exactly.
+`assertBreakdownReconciles` on the write path, and the renderer drops a
+breakdown that does not add up rather than showing a wrong one. Never recompute
+GST there; take it from `priceOrder`.
+
+**A customer-facing claim about policy** (returns, resizing, certification) —
+link to the policy page rather than restating it, and check the wording against
+that page. Two copies of a promise drift, and the customer finds out at the
+moment they are relying on it.
+
 **Anything that sends mail on a visitor's say-so** — rate limit it twice: once
 per browser and once per target address. A rotating IP otherwise turns the
 endpoint into a way to bury somebody's inbox. `notifyWhenBackInStockAction` is

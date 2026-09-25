@@ -7,6 +7,7 @@ import {
   getProductBySlug,
   listIndexableProducts,
 } from '@/server/catalog/service';
+import { env } from '@/env';
 import { getAuthContext } from '@/server/auth/session';
 import { getWishlistProductIds } from '@/server/wishlist/service';
 import { absoluteUrl, buildMetadata, jsonLd, SITE } from '@/lib/seo';
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/accordion';
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { ProductDetailClient } from '@/components/product/product-detail-client';
+import { Assurances } from '@/components/product/assurances';
 import { ProductRail } from '@/components/product/product-grid';
 import { RecentlyViewed } from '@/components/product/recently-viewed';
 import { ReviewsSection } from '@/components/product/reviews-section';
@@ -106,9 +108,52 @@ function productSchema(product: ProductDetail) {
       url: absoluteUrl(`/products/${product.slug}`),
       priceCurrency: 'INR',
       price: minorToMajor(product.priceMinor).toFixed(2),
+      /*
+       * The bare `price` is the figure shown on the page, which is before GST
+       * — `priceOrder` adds tax on top at checkout. Left alone, a search
+       * result would quote a number the customer is not charged, which is the
+       * same defect the price breakup was built to remove, reappearing in a
+       * surface we do not look at.
+       *
+       * `priceSpecification` says so in the vocabulary's own terms rather than
+       * quietly inflating `price` to something the page never displays.
+       */
+      priceSpecification: {
+        '@type': 'UnitPriceSpecification',
+        priceCurrency: 'INR',
+        price: minorToMajor(product.priceMinor).toFixed(2),
+        valueAddedTaxIncluded: false,
+      },
       availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       itemCondition: 'https://schema.org/NewCondition',
       seller: { '@type': 'Organization', name: SITE.name },
+      // Both of these mirror the published policies exactly; see
+      // `content/pages.ts`. They are what turns a plain result into a merchant
+      // listing, and an inaccurate one is a promise made in a search result.
+      hasMerchantReturnPolicy: {
+        '@type': 'MerchantReturnPolicy',
+        applicableCountry: 'IN',
+        returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+        merchantReturnDays: 15,
+        returnMethod: 'https://schema.org/ReturnByMail',
+        returnFees: 'https://schema.org/FreeReturn',
+      },
+      /*
+       * Free shipping is declared only when this piece ALONE clears the
+       * threshold, in which case any basket containing it also clears it —
+       * adding more can only raise the subtotal. Below that it depends on what
+       * else is in the basket, which an offer for a single product cannot
+       * know, so it says nothing rather than guessing.
+       */
+      ...(product.priceMinor >= env.FREE_SHIPPING_THRESHOLD_MINOR
+        ? {
+            shippingDetails: {
+              '@type': 'OfferShippingDetails',
+              shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
+              shippingRate: { '@type': 'MonetaryAmount', currency: 'INR', value: '0' },
+            },
+          }
+        : {}),
     },
     ...(product.ratingCount > 0
       ? {
@@ -194,6 +239,7 @@ export default async function ProductPage({ params }: { params: Params }) {
             product={product}
             inWishlist={wishlistIds.has(product.id)}
             customerEmail={user?.email}
+            assurances={<Assurances />}
           />
         </div>
       </div>

@@ -486,7 +486,69 @@ login budget spent twice over. CI now runs both projects.
 
 ---
 
-## 12. Explicit assumptions
+## 12. Phase 3: the category's own conventions
+
+Research into how Indian jewellery is actually sold, turned into product.
+
+**Price breakup.** The defining feature of the category — Tanishq, CaratLane and
+Mia all publish metal weight × rate, making charges, stones and GST line by
+line, because a customer comparing two gold rings cannot compare sticker prices
+when most of the difference is weight they cannot see.
+
+The design decision that matters is what happens when the breakdown is wrong:
+`server/catalog/price-breakdown.ts` **drops it silently**. Components must sum
+to the ex-tax price to the paisa; anything else renders nothing and logs why. It
+is explicitly not a second pricing engine — it never decides what anything
+costs, and it takes the GST figure from `priceOrder` rather than recomputing it,
+because a second opinion about tax is exactly the bug a breakdown exists to rule
+out.
+
+Building it found a real one. The product page said **"Inclusive of GST"** while
+`priceOrder` adds GST on top, so the page showed one number and the checkout
+charged a larger one. `e2e/pricing.spec.ts` now reads the breakup off the
+product page and the totals off the checkout and asserts they agree.
+
+**Seed coherence.** The catalogue had three sets of numbers — price, metal
+weight, stone weight — invented independently, and they contradicted each other:
+a 10.8 g 22K signet ring priced at ₹89,000 is _below the melt value of its own
+gold_. Fifteen of twenty-six variants were in that state. Weights are now
+derived from the price at real market rates, stone weights come from the specs
+that state them, and making charges are the remainder — so the breakdown
+reconciles by construction. Two pieces priced below the cost of their own
+diamonds had their prices corrected.
+
+**Indian ring sizing.** The catalogue used 6–9, which are US numbers; in the
+Indian system those are child sizes. The help page already said "We use Indian
+ring sizes", so the data was contradicting the copy. Sizes are now 12–22, and
+`content/ring-sizes.ts` carries the chart with circumference derived from
+diameter so the two columns cannot drift.
+
+**Delivery estimates.** `server/delivery/estimate.ts` is pure and clock-injected,
+because a promised date is a promise: cut-off times, Sundays and IST are tested
+across a fortnight of order times for every zone. Deliberately not a table —
+zones change roughly never, and moving them into an admin screen would take a
+promise the shop is held to out of code review.
+
+**Assurances.** Four claims beside the buy button, each linking to the policy it
+comes from. Writing them caught two overstatements against the real policy —
+"30-day returns" where the policy says fifteen, and "IGI or GIA" where it says
+IGI — and an e2e test now asserts the claim and the policy still agree.
+
+**Gift options.** Jewellery is overwhelmingly bought as a gift, and the order
+note field was carrying the load — "please gift wrap it" buried in a paragraph
+the packing bench has to read and interpret. Now an explicit choice on the
+order snapshot (not the customer profile: what was asked for at the time is what
+gets packed, and a later profile edit must not change a parcel already on the
+bench), flagged in the admin list as well as on the order, and shown back to the
+customer so a wrong message is found before the parcel is.
+
+Wrapping is free, which is both authentic for the category and the reason it
+does not touch `priceOrder` — a charge would have to go through the pricing
+engine rather than be bolted on beside it.
+
+---
+
+## 13. Explicit assumptions
 
 1. Single storefront, single currency (**INR**), shipping within India.
 2. **GST 3%** on jewellery — configurable per category, with an environment-level default.

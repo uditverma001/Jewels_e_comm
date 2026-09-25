@@ -36,7 +36,14 @@
   --color-gold-300: oklch(0.86 0.062 85);
   --color-gold-400: oklch(0.78 0.086 82);
   --color-gold-500: oklch(0.7 0.098 78);
-  --color-gold-600: oklch(0.6 0.09 74);
+  /*
+   * gold-600 is the accent used for icons and, increasingly, for small text
+   * beside them — the gift flag in the admin order list, for one. At
+   * oklch(0.6) it measured 3.99:1 on white, which is fine for a decorative
+   * glyph and not fine for a 12px word. 0.53 measures 4.72:1 on the worst
+   * surface it lands on and still reads as gold rather than as brown.
+   */
+  --color-gold-600: oklch(0.53 0.09 74);
 
   /*
    * Status colours are used as text twice over: on the page background, and on

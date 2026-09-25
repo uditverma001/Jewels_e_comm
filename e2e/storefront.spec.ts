@@ -130,9 +130,9 @@ test('product page carries Product structured data matching what is shown', asyn
 test('a sold-out variant cannot be added to the bag', async ({ page }) => {
   await page.goto('/products/aurora-solitaire-ring');
 
-  // Size 9 is seeded with zero stock. Its accessible name carries the
+  // Size 18 is seeded with zero stock. Its accessible name carries the
   // screen-reader suffix, which is the whole point of that markup.
-  const soldOutOption = page.getByRole('button', { name: '9 (sold out)' });
+  const soldOutOption = page.getByRole('button', { name: '18 (sold out)' });
   await expect(soldOutOption).toBeVisible();
   await soldOutOption.click();
 
@@ -140,15 +140,15 @@ test('a sold-out variant cannot be added to the bag', async ({ page }) => {
   await expect(page.getByRole('button', { name: /add to bag/i })).toBeDisabled();
 
   // A stocked size re-enables it, and its name carries no suffix.
-  await page.getByRole('button', { name: '7', exact: true }).click();
+  await page.getByRole('button', { name: '14', exact: true }).click();
   await expect(page.getByRole('button', { name: /add to bag/i })).toBeEnabled();
 });
 
 test('a sold-out variant offers to write when it is back', async ({ page }) => {
   await page.goto('/products/aurora-solitaire-ring');
 
-  // Size 9 is seeded with zero stock.
-  await page.getByRole('button', { name: '9 (sold out)', exact: true }).click();
+  // Size 18 is seeded with zero stock.
+  await page.getByRole('button', { name: '18 (sold out)', exact: true }).click();
   // `exact` because the option button carries a screen-reader "(sold out)" too.
   await expect(page.getByText('Sold out', { exact: true })).toBeVisible();
 
@@ -186,4 +186,67 @@ test('the mobile sticky bar adds to the bag without shadowing the main button', 
 
   await sticky.click();
   await expect(page.getByText(/added to your bag/i)).toBeVisible({ timeout: 20_000 });
+});
+
+test('the ring size guide is reachable from the size picker and answers in Indian sizes', async ({
+  page,
+}) => {
+  await page.goto('/products/aurora-solitaire-ring');
+
+  // Beside the picker, not in the footer — size is resolved while choosing.
+  await page.getByRole('button', { name: /size guide/i }).click();
+
+  const guide = page.getByRole('dialog');
+  await expect(guide.getByRole('heading', { name: /ring sizes/i })).toBeVisible();
+
+  // Indian sizing, not US: size 14 has a 17.2 mm inner diameter.
+  const row = guide.getByRole('row', { name: /^14\b/ });
+  await expect(row).toContainText('17.2 mm');
+  // Circumference is derived from the diameter, so the two columns agree.
+  await expect(row).toContainText('54.0 mm');
+
+  await expect(guide.getByText(/measure a ring you already wear/i)).toBeVisible();
+});
+
+test('the size guide marks the size the customer has chosen', async ({ page }) => {
+  await page.goto('/products/aurora-solitaire-ring');
+  await page.getByRole('button', { name: '14', exact: true }).click();
+  await page.getByRole('button', { name: /size guide/i }).click();
+
+  // Announced, not only coloured — the highlight carries information.
+  const selected = page.getByRole('dialog').getByRole('row', { name: /your selection/i });
+  await expect(selected).toContainText('14');
+});
+
+test('the delivery check answers with a dated window, or says why it cannot', async ({ page }) => {
+  await page.goto('/products/aurora-solitaire-ring');
+
+  await page.fill('#delivery-pincode', '400001');
+  await page.getByRole('button', { name: /^check$/i }).click();
+
+  // A date, not "3-5 working days" — the point is that it can be planned around.
+  await expect(page.getByText(/arrives/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/mumbai/i).first()).toBeVisible();
+  await expect(page.getByText(/insured and signature-on-delivery/i)).toBeVisible();
+
+  // An army post code gets an explanation, not a flat refusal, because the
+  // customer has a civilian address we could have shipped to.
+  await page.fill('#delivery-pincode', '900001');
+  await page.getByRole('button', { name: /^check$/i }).click();
+  await expect(page.getByText(/army post office/i)).toBeVisible({ timeout: 15_000 });
+});
+
+test('the assurances beside the buy button match the policies they link to', async ({ page }) => {
+  await page.goto('/products/aurora-solitaire-ring');
+
+  // Each claim is a link, so a customer can check it rather than take it on
+  // faith — and so the two can be compared when one of them changes.
+  const returns = page.getByRole('link', { name: /15-day returns/i });
+  await expect(returns).toBeVisible();
+  await returns.click();
+
+  await expect(page).toHaveURL(/\/help\/returns/);
+  // The policy page must actually say fifteen days. An overstated assurance is
+  // discovered at the moment a customer is relying on it.
+  await expect(page.getByText(/fifteen days/i).first()).toBeVisible();
 });
