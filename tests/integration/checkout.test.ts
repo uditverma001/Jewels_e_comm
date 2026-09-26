@@ -396,3 +396,77 @@ describe('order creation', () => {
     expect(new Set(suffixes).size).toBe(3);
   });
 });
+
+/**
+ * Gift options.
+ *
+ * These travel on the immutable order snapshot rather than on the customer's
+ * profile, because what was asked for at the time is what the packing bench
+ * must do — and a later profile edit must not silently change a parcel that
+ * has already been packed.
+ */
+async function stockedCart(userId: string): Promise<void> {
+  const { variants } = await createProduct({
+    basePriceMinor: 5_000_000,
+    variants: [{ label: 'Size 7', quantity: 5 }],
+  });
+  await createCart({
+    userId,
+    items: [{ variantId: variants[0]!.id, quantity: 1, addedUnitPriceMinor: 5_000_000 }],
+  });
+}
+
+describe('gift options', () => {
+  it('carries the wrap request and card message onto the order', async () => {
+    const user = await createUser();
+    await stockedCart(user.id);
+
+    const { order } = await createOrder(
+      { userId: user.id },
+      checkoutInput({ giftWrap: true, giftMessage: 'Happy anniversary, with love.' }),
+    );
+
+    const stored = await testDb.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.giftWrap).toBe(true);
+    expect(stored.giftMessage).toBe('Happy anniversary, with love.');
+  });
+
+  it('stores no message rather than an empty one', async () => {
+    const user = await createUser();
+    await stockedCart(user.id);
+
+    const { order } = await createOrder(
+      { userId: user.id },
+      checkoutInput({ giftWrap: true, giftMessage: '' }),
+    );
+
+    // An empty string is a third state meaning the same as "none", and it
+    // reaches the bench as a blank card nobody asked for. The column has a
+    // CHECK constraint saying so; this asserts the service agrees.
+    const stored = await testDb.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(stored.giftMessage).toBeNull();
+  });
+
+  it('defaults to not a gift', async () => {
+    const user = await createUser();
+    await stockedCart(user.id);
+
+    const { order } = await createOrder({ userId: user.id }, checkoutInput());
+    const stored = await testDb.order.findUniqueOrThrow({ where: { id: order.id } });
+
+    expect(stored.giftWrap).toBe(false);
+    expect(stored.giftMessage).toBeNull();
+  });
+
+  it('refuses a blank message straight to the database', async () => {
+    // The service maps '' to null, so this checks the constraint underneath it
+    // rather than the code path that normally protects it.
+    const user = await createUser();
+    await stockedCart(user.id);
+    const { order } = await createOrder({ userId: user.id }, checkoutInput());
+
+    await expect(
+      testDb.order.update({ where: { id: order.id }, data: { giftMessage: '   ' } }),
+    ).rejects.toThrow();
+  });
+});

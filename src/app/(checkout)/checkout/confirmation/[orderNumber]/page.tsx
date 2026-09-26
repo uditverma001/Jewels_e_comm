@@ -188,8 +188,18 @@ export default async function ConfirmationPage({
             </Button>
           ) : null}
           <Button asChild size="lg" variant={failed ? 'outline' : 'primary'} className="flex-1">
-            <Link href={user ? `/account/orders/${order.orderNumber}` : '/shop'}>
-              {user ? 'View order' : 'Continue shopping'}
+            {/* A guest has no account page; the tracking page is where their
+                order actually lives. Until it existed this button sent them
+                to the shop, and the note below promised a lookup that had
+                nowhere to happen. */}
+            <Link
+              href={
+                user
+                  ? `/account/orders/${order.orderNumber}`
+                  : `/orders/track?order=${encodeURIComponent(order.orderNumber)}`
+              }
+            >
+              {user ? 'View order' : 'Track this order'}
             </Link>
           </Button>
         </div>
@@ -203,7 +213,14 @@ export default async function ConfirmationPage({
             />
             <span>
               You checked out as a guest. Keep order {order.orderNumber} and the email address above
-              — together they let you look this order up at any time.
+              — together they let you{' '}
+              <Link
+                href={`/orders/track?order=${encodeURIComponent(order.orderNumber)}`}
+                className="text-ink-900 underline underline-offset-4"
+              >
+                look this order up
+              </Link>{' '}
+              at any time.
             </span>
           </p>
         ) : null}

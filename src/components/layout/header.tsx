@@ -118,7 +118,14 @@ export async function Header() {
                 aria-hidden="true"
               />
               {itemCount > 0 ? (
-                <span className="bg-ink-900 text-ivory-50 absolute top-1 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[0.625rem] font-medium tabular-nums">
+                <span
+                  // `key` on the count is what makes this animate: React
+                  // remounts the element whenever the number changes, so the
+                  // animation replays. Without it the class is already applied
+                  // and nothing happens on the second item.
+                  key={itemCount}
+                  className="bg-ink-900 text-ivory-50 animate-count-bump absolute top-1 right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[0.625rem] font-medium tabular-nums"
+                >
                   {itemCount > 99 ? '99+' : itemCount}
                 </span>
               ) : null}

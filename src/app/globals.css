@@ -14,8 +14,19 @@
   --color-ivory-200: oklch(0.955 0.011 82);
   --color-ivory-300: oklch(0.918 0.015 80);
 
+  /*
+   * stone-500 is `--text-muted`: eyebrows, breadcrumbs, captions, SKUs. At
+   * oklch(0.6) it measured 3.47:1 against the ivory backgrounds — below the
+   * 4.5:1 WCAG AA floor for text this size, on every page of the site. 0.53
+   * measures 4.67:1 on the worst pairing and is the lightest value that
+   * clears it, so the type stays quiet without becoming unreadable.
+   *
+   * stone-400 is deliberately left alone: it is only ever used for
+   * `aria-hidden` separators, disabled glyphs and input placeholders, none of
+   * which carry meaning a reader has to recover.
+   */
   --color-stone-400: oklch(0.72 0.014 70);
-  --color-stone-500: oklch(0.6 0.014 66);
+  --color-stone-500: oklch(0.53 0.014 66);
   --color-stone-600: oklch(0.48 0.014 62);
 
   --color-ink-700: oklch(0.36 0.012 58);
@@ -25,11 +36,33 @@
   --color-gold-300: oklch(0.86 0.062 85);
   --color-gold-400: oklch(0.78 0.086 82);
   --color-gold-500: oklch(0.7 0.098 78);
-  --color-gold-600: oklch(0.6 0.09 74);
+  /*
+   * gold-600 is the accent used for icons and, increasingly, for small text
+   * beside them — the gift flag in the admin order list, for one. At
+   * oklch(0.6) it measured 3.99:1 on white, which is fine for a decorative
+   * glyph and not fine for a 12px word. 0.53 measures 4.72:1 on the worst
+   * surface it lands on and still reads as gold rather than as brown.
+   */
+  --color-gold-600: oklch(0.53 0.09 74);
 
-  --color-success: oklch(0.58 0.11 152);
-  --color-danger: oklch(0.55 0.185 27);
-  --color-warning: oklch(0.72 0.14 78);
+  /*
+   * Status colours are used as text twice over: on the page background, and on
+   * a badge tinted with the same hue. The tint is the harder of the two, so the
+   * values below are chosen to clear 4.5:1 on BOTH rather than on ivory alone.
+   * Measured with a canvas read-back, not estimated.
+   *
+   * Worst case across every background they land on — ivory, white, and the
+   * badge tints as they composite over both the storefront and the admin
+   * panels — with margin, so the next surface colour does not reopen this:
+   *   success 4.93    danger 4.92    warning 4.87
+   *
+   * The originals failed badly — success was 3.80:1 and warning 2.3:1 — and the
+   * warning badge had already been patched with a hardcoded darker text colour
+   * to compensate. That workaround is gone; the token is correct now.
+   */
+  --color-success: oklch(0.49 0.11 152);
+  --color-danger: oklch(0.51 0.185 27);
+  --color-warning: oklch(0.5 0.14 78);
 
   --font-display: var(--font-cormorant), Georgia, 'Times New Roman', serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -48,6 +81,7 @@
   --animate-accordion-down: aurelia-accordion-down 220ms var(--ease-premium);
   --animate-accordion-up: aurelia-accordion-up 180ms var(--ease-premium);
   --animate-rise: aurelia-rise 520ms var(--ease-premium) both;
+  --animate-count-bump: aurelia-count-bump 420ms var(--ease-premium);
 }
 
 @keyframes aurelia-fade-in {
@@ -104,6 +138,18 @@
   }
   to {
     height: 0;
+  }
+}
+/* The bag count acknowledging a new item. One beat, no bounce-back. */
+@keyframes aurelia-count-bump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.32);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 @keyframes aurelia-rise {
@@ -257,5 +303,85 @@
   scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/*
+ * Scroll-linked reveal.
+ *
+ * Built on `animation-timeline: view()` rather than an IntersectionObserver, so
+ * it is pure CSS. That matters for more than elegance: a JS reveal has to start
+ * its elements hidden, which means a script failure — or a strict CSP, or a
+ * crawler — leaves the page blank. Here the animation is decoration on content
+ * that is already painted. Browsers without scroll-driven animations ignore the
+ * timeline and run it once on load, which is a fade-in rather than nothing.
+ *
+ * Keep it to opacity and a few pixels of travel. This is a jewellery shop; the
+ * photography should be the thing that moves the customer, not the layout.
+ */
+@utility reveal {
+  animation: aurelia-rise linear both;
+  animation-timeline: view();
+  /* Finish well before the element is centred, so reading is never gated on
+     scrolling further. */
+  animation-range: entry 0% cover 28%;
+}
+
+/*
+ * Stagger for grid children. Applied to the container; each card settles a beat
+ * after the one before it.
+ *
+ * The stagger comes from `animation-range`, not `animation-delay`: a
+ * scroll-driven animation takes its progress from the timeline rather than from
+ * elapsed time, so a delay in milliseconds does nothing to it. Pushing each
+ * child's range a little further down the scroll is what actually offsets them.
+ *
+ * `animation-delay` is still set, because it is the only thing that staggers
+ * the time-based fallback in browsers without scroll-driven animations. The two
+ * properties cover the two paths; neither is redundant.
+ *
+ * Capped at the sixth child — a longer ladder stops reading as choreography and
+ * starts reading as a page that has not finished loading.
+ */
+@utility reveal-stagger {
+  & > * {
+    animation: aurelia-rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 22%;
+  }
+  & > *:nth-child(2) {
+    animation-range: entry 0% cover 27%;
+    animation-delay: 40ms;
+  }
+  & > *:nth-child(3) {
+    animation-range: entry 0% cover 32%;
+    animation-delay: 80ms;
+  }
+  & > *:nth-child(4) {
+    animation-range: entry 0% cover 37%;
+    animation-delay: 120ms;
+  }
+  & > *:nth-child(5) {
+    animation-range: entry 0% cover 42%;
+    animation-delay: 160ms;
+  }
+  & > *:nth-child(n + 6) {
+    animation-range: entry 0% cover 46%;
+    animation-delay: 200ms;
+  }
+}
+
+@layer base {
+  /*
+   * The global reduced-motion rule collapses `animation-duration`, which a
+   * scroll-driven animation ignores — its progress comes from the timeline, not
+   * from time. Detaching the timeline is what actually stops these.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal,
+    .reveal-stagger > * {
+      animation-timeline: auto !important;
+      animation-delay: 0ms !important;
+    }
   }
 }

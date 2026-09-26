@@ -10,7 +10,8 @@ import { PrismaClient } from '@prisma/client';
  * the per-account login limit partway through — a correct limit failing a test
  * for the wrong reason.
  *
- * It also checks the seed is present, because a suite that fails with
+ * It also clears the state the suite accumulates across runs, and checks the
+ * seed is present, because a suite that fails with
  * "element not found" when the real problem is an empty database wastes
  * everybody's afternoon.
  */
@@ -27,6 +28,24 @@ export default async function globalSetup(): Promise<void> {
     await db.wishlistItem.deleteMany({});
     await db.cartItem.deleteMany({});
     await db.cart.deleteMany({});
+
+    // Addresses the suite saves are capped at 10 per customer by
+    // `MAX_ADDRESSES`. They survive reseeding, so without this the address test
+    // passes for a few runs and then starts failing on a correct limit — which
+    // reads like a regression in address saving rather than accumulated
+    // fixtures. Matched by the names the suite uses, so seeded addresses stay.
+    await db.address.deleteMany({
+      where: { fullName: { in: ['Second Address'] } },
+    });
+    await db.address.deleteMany({
+      where: { fullName: { startsWith: 'E2E ' } },
+    });
+
+    // Back-in-stock requests the suite leaves behind. Unique per
+    // (variant, email), so a repeat run would otherwise hit the conflict path.
+    await db.stockNotification.deleteMany({
+      where: { email: { endsWith: '@aurelia.test' } },
+    });
 
     // Reseed. The suite buys things, which permanently moves stock, so a run
     // that starts from wherever the previous one finished will eventually

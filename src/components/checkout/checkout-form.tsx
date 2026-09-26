@@ -94,6 +94,8 @@ export function CheckoutForm({
   const [email, setEmail] = useState(defaultEmail);
   const [phone, setPhone] = useState(defaultPhone);
   const [customerNote, setCustomerNote] = useState('');
+  const [giftWrap, setGiftWrap] = useState(false);
+  const [giftMessage, setGiftMessage] = useState('');
 
   const defaultAddress = savedAddresses.find((address) => address.isDefault) ?? savedAddresses[0];
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
@@ -135,6 +137,10 @@ export function CheckoutForm({
       phone,
       shippingMethodCode,
       customerNote,
+      giftWrap,
+      // Only sent when wrapping was asked for. A message on an unwrapped
+      // parcel has nothing to be written on.
+      giftMessage: giftWrap ? giftMessage : '',
       ...(usingSavedAddress
         ? { shippingAddressId: selectedAddressId, shippingAddress: toAddressInput(address) }
         : { shippingAddress: toAddressInput(address) }),
@@ -401,13 +407,59 @@ export function CheckoutForm({
               })}
             </fieldset>
 
+            {/*
+             * Gift options are their own choice, not a line in a free-text
+             * note. The packing bench cannot reliably act on "please gift wrap
+             * it" buried in a paragraph, and a message written there never
+             * makes it onto a card.
+             */}
+            <fieldset className="border-ivory-300 border-t pt-6">
+              <legend className="sr-only">Gift options</legend>
+
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="checkout-gift-wrap"
+                  checked={giftWrap}
+                  onChange={(event) => setGiftWrap(event.target.checked)}
+                  className="accent-ink-900 mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>
+                  <span className="text-ink-900 block text-[0.9375rem]">This is a gift</span>
+                  <span className="mt-0.5 block text-sm text-stone-600">
+                    Wrapped in our box with a ribbon, and no prices anywhere in the parcel.
+                    Complimentary.
+                  </span>
+                </span>
+              </label>
+
+              {giftWrap ? (
+                <div className="mt-4">
+                  <Field label="Message on the card (optional)" htmlFor="checkout-gift-message">
+                    <Textarea
+                      id="checkout-gift-message"
+                      value={giftMessage}
+                      onChange={(event) => setGiftMessage(event.target.value)}
+                      rows={3}
+                      maxLength={200}
+                      placeholder="Written by hand on a card and tucked into the box"
+                    />
+                  </Field>
+                  <p className="mt-1.5 text-xs text-stone-500" aria-live="polite">
+                    {200 - giftMessage.length} characters left
+                  </p>
+                </div>
+              ) : null}
+            </fieldset>
+
             <Field label="Order note (optional)" htmlFor="checkout-note">
               <Textarea
+                id="checkout-note"
                 value={customerNote}
                 onChange={(event) => setCustomerNote(event.target.value)}
                 rows={3}
                 maxLength={500}
-                placeholder="Gift wrapping, engraving requests, delivery instructions"
+                placeholder="Engraving requests or delivery instructions"
               />
             </Field>
 

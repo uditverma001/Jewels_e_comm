@@ -29,7 +29,7 @@ export default async function CartPage() {
   if (cart.lines.length === 0) {
     return (
       <div className="container-page pb-20">
-        <Breadcrumbs crumbs={[{ label: 'Your bag', href: '/cart' }]} />
+        <Breadcrumbs crumbs={[{ label: 'Your bag', href: '/cart' }]} structuredData={false} />
         <div className="py-24 text-center">
           <ShoppingBag
             className="mx-auto h-10 w-10 text-stone-400"
@@ -50,7 +50,7 @@ export default async function CartPage() {
 
   return (
     <div className="container-page pb-20">
-      <Breadcrumbs crumbs={[{ label: 'Your bag', href: '/cart' }]} />
+      <Breadcrumbs crumbs={[{ label: 'Your bag', href: '/cart' }]} structuredData={false} />
 
       <h1 className="pt-2 pb-2 text-[2rem] lg:text-[2.5rem]">Your bag</h1>
       <p className="text-sm text-stone-600">

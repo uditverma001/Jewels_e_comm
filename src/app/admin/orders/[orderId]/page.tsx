@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Gift } from 'lucide-react';
 import { getAuthContext } from '@/server/auth/session';
 import { findOrderById } from '@/server/orders/service';
 import {
@@ -95,6 +96,14 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ ord
                       {item.variantLabel} · {item.sku} · {formatMinor(item.unitPriceMinor)} ×{' '}
                       {item.quantity}
                     </p>
+                    {/* Loud, because it is a manual step that cannot be undone
+                        and the piece cannot be returned once it is done. */}
+                    {item.engravingText ? (
+                      <p className="border-gold-400 text-ink-900 mt-1.5 border-l-2 pl-2 text-xs">
+                        <span className="text-stone-500">Engrave:</span>{' '}
+                        <span className="font-medium">{item.engravingText}</span>
+                      </p>
+                    ) : null}
                   </div>
                   <p className="shrink-0 text-sm tabular-nums">
                     {formatMinor(item.lineSubtotalMinor - item.lineDiscountMinor)}
@@ -218,6 +227,31 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ ord
               ) : null}
             </div>
           </section>
+
+          {/*
+           * Gift instructions come first and are visually loud, because this
+           * is the one thing on the screen that changes what the packing bench
+           * physically does. Missing it means the parcel goes out with an
+           * invoice in it and no card.
+           */}
+          {order.giftWrap ? (
+            <section className="border-gold-400 bg-gold-300/10 border p-5">
+              <h2 className="mb-2 flex items-center gap-2 text-[1.125rem]">
+                <Gift className="text-gold-600 h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                Gift order
+              </h2>
+              <p className="text-sm text-stone-700">
+                Wrap in a gift box with ribbon. No invoice or price anywhere in the parcel.
+              </p>
+              {order.giftMessage ? (
+                <blockquote className="border-gold-400 mt-3 border-l-2 pl-3 text-sm text-stone-700 italic">
+                  {order.giftMessage}
+                </blockquote>
+              ) : (
+                <p className="mt-2 text-xs text-stone-500">No card message.</p>
+              )}
+            </section>
+          ) : null}
 
           {order.customerNote ? (
             <section className="border-ivory-300 border bg-white p-5">

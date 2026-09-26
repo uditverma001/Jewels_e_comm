@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Cormorant_Garamond, Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
-import { SITE, absoluteUrl, jsonLd } from '@/lib/seo';
+import { SITE } from '@/lib/seo';
 import './globals.css';
 
 const cormorant = Cormorant_Garamond({
@@ -41,21 +41,6 @@ export const viewport: Viewport = {
   colorScheme: 'light',
 };
 
-const organizationSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'Organization',
-  name: SITE.name,
-  url: SITE.url,
-  description: SITE.description,
-  logo: absoluteUrl('/icon.svg'),
-  address: {
-    '@type': 'PostalAddress',
-    addressCountry: 'IN',
-    addressLocality: 'Mumbai',
-    addressRegion: 'Maharashtra',
-  },
-};
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-IN" className={`${cormorant.variable} ${inter.variable}`}>
@@ -73,10 +58,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               fontFamily: 'var(--font-sans)',
             },
           }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLd(organizationSchema) }}
         />
       </body>
     </html>

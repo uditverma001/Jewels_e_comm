@@ -3,30 +3,13 @@ import type { NextConfig } from 'next';
 /**
  * Security headers applied to every response.
  *
- * The CSP is intentionally strict. `'unsafe-inline'` is required for styles because
- * Next.js injects inline <style> for critical CSS; scripts use nonce-free
- * `'strict-dynamic'`-less allowlisting because Next's bootstrap scripts are inline
- * and hashing them per build is brittle. The remaining directives keep the blast
- * radius small (no plugins, no framing, no form posts off-origin).
+ * The Content-Security-Policy is NOT here: it varies per route and per request
+ * (a nonce on the private surfaces, none on the cached catalogue), which a
+ * static config cannot express. `src/middleware.ts` sets it, and
+ * `src/server/security/csp.ts` explains the split. Everything below is the
+ * same for every response, so it stays declarative.
  */
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  // Razorpay Checkout is injected as a third-party script + iframe.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
-  "connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com",
-  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  'upgrade-insecure-requests',
-].join('; ');
-
 const securityHeaders = [
-  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

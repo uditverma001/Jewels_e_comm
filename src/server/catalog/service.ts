@@ -1,7 +1,10 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { db } from '@/lib/db';
+import { env } from '@/env';
 import { notFound } from '@/server/errors';
+import { applyBasisPoints } from '@/server/money';
+import { buildBreakdown, type PriceBreakdownView } from './price-breakdown';
 import type { CatalogFilters } from './schema';
 import { findProducts, findProductRail, findRelatedProducts, findProductsByIds } from './queries';
 import type { CatalogResult, ProductCard, ProductDetail, VariantView } from './types';
@@ -76,7 +79,9 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
   const product = await db.product.findFirst({
     where: { slug, status: 'ACTIVE', deletedAt: null, publishedAt: { not: null, lte: new Date() } },
     include: {
-      category: { include: { parent: { select: { name: true, slug: true } } } },
+      category: {
+        include: { parent: { select: { name: true, slug: true, taxRateBps: true } } },
+      },
       brand: { select: { name: true, slug: true } },
       collection: { select: { id: true, name: true, slug: true } },
       media: { orderBy: { position: 'asc' } },
@@ -94,6 +99,7 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
         include: {
           inventory: true,
           optionValues: { include: { optionValue: { select: { id: true, optionId: true } } } },
+          priceComponents: { orderBy: { position: 'asc' } },
         },
       },
     },
@@ -104,6 +110,33 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
   const variants = product.variants.map((variant) =>
     toVariantView(variant, product.basePriceMinor, product.compareAtPriceMinor),
   );
+
+  // GST is the category's, inherited from its parent, falling back to the
+  // configured default — the same resolution the checkout uses, so the
+  // breakdown cannot quote a rate the customer is not charged.
+  const taxRateBps =
+    product.category.taxRateBps ?? product.category.parent?.taxRateBps ?? env.DEFAULT_TAX_RATE_BPS;
+
+  const breakdowns = new Map<string, PriceBreakdownView>();
+  for (const variant of product.variants) {
+    const exTax = variant.priceMinor ?? product.basePriceMinor;
+    const breakdown = buildBreakdown({
+      components: variant.priceComponents.map((component) => ({
+        kind: component.kind,
+        label: component.label,
+        amountMinor: component.amountMinor,
+        quantity: component.quantity == null ? null : Number(component.quantity),
+        unit: component.unit,
+        ratePerUnitMinor: component.ratePerUnitMinor,
+      })),
+      exTaxPriceMinor: exTax,
+      taxMinor: applyBasisPoints(exTax, taxRateBps),
+      taxRateBps,
+      onMismatch: (reason) =>
+        console.warn(`[catalog] dropping price breakdown for variant ${variant.id}: ${reason}`),
+    });
+    if (breakdown) breakdowns.set(variant.id, breakdown);
+  }
 
   // The headline price is the cheapest purchasable option; falling back to the
   // cheapest overall so a fully sold-out product still shows a price.
@@ -165,6 +198,9 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
       value: pav.attributeValue.value,
     })),
     totalAvailable: variants.reduce((sum, v) => sum + v.availableQuantity, 0),
+    engravingMaxLength: product.engravingMaxLength,
+    taxRateBps,
+    priceBreakdowns: Object.fromEntries(breakdowns),
   };
 }
 

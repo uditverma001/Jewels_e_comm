@@ -35,8 +35,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
   }
 
+  // Check the declared length before reading. `request.text()` buffers the
+  // whole body into memory, so testing its size afterwards means the oversized
+  // payload has already been accepted — which is the thing the limit exists to
+  // prevent. This endpoint is unauthenticated until the signature is checked,
+  // so it is the one an attacker can point a firehose at.
+  const declaredLength = Number(request.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
+  }
+
   const rawBody = await request.text();
-  if (rawBody.length > MAX_BODY_BYTES) {
+  // A chunked request carries no content-length, so the post-read check stays
+  // as the backstop for that case.
+  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
   }
 

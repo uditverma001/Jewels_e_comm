@@ -12,7 +12,7 @@ const badgeVariants = cva(
         gold: 'bg-gold-500 text-ink-900',
         success: 'bg-[var(--color-success)]/12 text-[var(--color-success)]',
         danger: 'bg-[var(--color-danger)]/12 text-[var(--color-danger)]',
-        warning: 'bg-[var(--color-warning)]/16 text-[oklch(0.5_0.12_78)]',
+        warning: 'bg-[var(--color-warning)]/16 text-[var(--color-warning)]',
         outline: 'border border-ink-900/20 text-ink-800',
       },
     },

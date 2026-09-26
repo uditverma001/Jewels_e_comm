@@ -47,8 +47,13 @@ export const requestContext = {
   reset(): void {
     stores.cookies.clear();
     stores.headers.clear();
-    stores.headers.set('origin', 'http://localhost:3000');
-    stores.headers.set('host', 'localhost:3000');
+    // Derive the fixture's origin from the configured APP_URL rather than
+    // hardcoding one. The CSRF guard trusts only APP_URL and ADDITIONAL_ORIGINS
+    // — deliberately not the request's own Host header — so a hardcoded origin
+    // here would test nothing whenever the two drifted apart.
+    const appOrigin = new URL(process.env.APP_URL ?? 'http://localhost:3000');
+    stores.headers.set('origin', appOrigin.origin);
+    stores.headers.set('host', appOrigin.host);
     stores.headers.set('user-agent', 'vitest');
     // Rate-limit subjects derive from this; varying it isolates limit buckets.
     stores.headers.set('x-forwarded-for', `203.0.113.${Math.floor(Math.random() * 250) + 1}`);

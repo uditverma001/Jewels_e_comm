@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Truck } from 'lucide-react';
+import { Gift, Truck } from 'lucide-react';
 import { getAuthContext } from '@/server/auth/session';
 import { findOrderForUser } from '@/server/orders/service';
 import {
@@ -67,6 +67,30 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
+      {/* What the customer asked for, shown back to them — so a wrong or
+          missing gift message is discovered before the parcel arrives. */}
+      {order.giftWrap ? (
+        <div className="border-ivory-300 flex items-start gap-3 border p-4">
+          <Gift
+            className="text-gold-600 mt-0.5 h-4 w-4 shrink-0"
+            strokeWidth={1.5}
+            aria-hidden="true"
+          />
+          <div>
+            <p className="text-[0.9375rem]">Wrapped as a gift</p>
+            <p className="mt-0.5 text-sm text-stone-600">
+              No prices are included in the parcel.
+              {order.giftMessage ? ' Your card reads:' : ' No card message was added.'}
+            </p>
+            {order.giftMessage ? (
+              <blockquote className="border-ivory-300 mt-2 border-l-2 pl-3 text-sm text-stone-700 italic">
+                {order.giftMessage}
+              </blockquote>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {shipment ? (
         <div className="border-ivory-300 flex items-start gap-3 border p-4">
           <Truck
@@ -125,6 +149,11 @@ export default async function OrderDetailPage({
                 </p>
                 <p className="mt-0.5 text-xs text-stone-500">
                   {item.variantLabel} · {item.sku} · Qty {item.quantity}
+                  {item.engravingText ? (
+                    <span className="text-ink-800 mt-1 block">
+                      Engraved: <span className="italic">{item.engravingText}</span>
+                    </span>
+                  ) : null}
                 </p>
               </div>
               <p className="shrink-0 text-sm tabular-nums">

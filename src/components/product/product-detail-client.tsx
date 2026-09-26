@@ -16,9 +16,13 @@ import { rememberViewedProduct } from './recently-viewed-store';
 export function ProductDetailClient({
   product,
   inWishlist,
+  customerEmail,
+  assurances,
 }: {
   product: ProductDetail;
   inWishlist: boolean;
+  customerEmail?: string;
+  assurances?: React.ReactNode;
 }) {
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
 
@@ -40,6 +44,8 @@ export function ProductDetailClient({
           <PurchasePanel
             product={product}
             inWishlist={inWishlist}
+            customerEmail={customerEmail}
+            assurances={assurances}
             onVariantChange={setActiveVariantId}
           />
         </div>

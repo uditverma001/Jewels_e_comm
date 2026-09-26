@@ -21,6 +21,12 @@ const cuid = z.string().min(1).max(40);
 const addItemSchema = z.object({
   variantId: cuid,
   quantity: z.coerce.number().int().min(1).max(10).default(1),
+  /**
+   * Bounded generously here and enforced properly in the service against the
+   * product's own `engravingMaxLength` — the real limit is a physical fact
+   * about the piece, and the client must not be the one that knows it.
+   */
+  engravingText: z.string().max(200).optional(),
 });
 
 const updateQuantitySchema = z.object({

@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
 import { slugify } from '../src/lib/utils';
+import { buildSeedComponents } from './price-components';
+import { assertBreakdownReconciles } from '../src/server/catalog/price-breakdown';
 import {
   ATTRIBUTES,
   BRANDS,
@@ -202,6 +204,31 @@ async function seedTaxonomy() {
 
 type Taxonomy = Awaited<ReturnType<typeof seedTaxonomy>>;
 
+/**
+ * Total carat weight, summed from the product's own specs.
+ *
+ * Several pieces state stones in more than one line — "2.10ct Zambian emerald"
+ * plus "0.35ct brilliants" — and the breakdown has to price all of them, not
+ * just the first. Read back from the specs rather than restated in a second
+ * field, so the two can never disagree.
+ */
+function caratsFromSpecs(specs: readonly { label: string; value: string }[]): number | null {
+  let total = 0;
+  for (const spec of specs) {
+    // Only the first figure per spec: "0.50ct (0.25ct each)" is one weight
+    // stated two ways, not three-quarters of a carat.
+    const match = /([\d.]+)\s*ct\b/i.exec(spec.value);
+    if (!match) continue;
+    const carats = Number(match[1]);
+    if (Number.isFinite(carats) && carats > 0) total += carats;
+  }
+  return total > 0 ? round3(total) : null;
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 async function seedProducts(taxonomy: Taxonomy) {
   const { categoryIds, collectionIds, brandIds, attributeValueIds } = taxonomy;
   let publishedOffset = 0;
@@ -226,6 +253,7 @@ async function seedProducts(taxonomy: Taxonomy) {
         status: 'ACTIVE',
         isFeatured: seed.isFeatured ?? false,
         isBestSeller: seed.isBestSeller ?? false,
+        engravingMaxLength: seed.engravingMaxLength ?? null,
       },
       create: {
         name: seed.name,
@@ -241,6 +269,7 @@ async function seedProducts(taxonomy: Taxonomy) {
         collectionId: seed.collection ? (collectionIds.get(seed.collection) ?? null) : null,
         basePriceMinor: seed.basePriceMinor,
         compareAtPriceMinor: seed.compareAtPriceMinor ?? null,
+        engravingMaxLength: seed.engravingMaxLength ?? null,
         tags: seed.tags,
         isFeatured: seed.isFeatured ?? false,
         isBestSeller: seed.isBestSeller ?? false,
@@ -353,6 +382,37 @@ async function seedProducts(taxonomy: Taxonomy) {
         update: { quantity: variant.quantity },
         create: { variantId: created.id, quantity: variant.quantity, lowStockThreshold: 3 },
       });
+
+      // Price breakup. Replaced wholesale on every seed run so a changed price
+      // can never leave last run's components behind — a stale breakdown is
+      // silently dropped at render time, which looks like the feature is
+      // broken rather than like the data is.
+      const exTaxPriceMinor = variant.priceDeltaMinor
+        ? seed.basePriceMinor + variant.priceDeltaMinor
+        : seed.basePriceMinor;
+
+      const { components, weightGrams } = buildSeedComponents({
+        exTaxPriceMinor,
+        purity: seed.attributes.purity ?? null,
+        metalType: seed.attributes['metal-type'] ?? null,
+        stoneType: seed.attributes['stone-type'] ?? null,
+        stoneCarats: caratsFromSpecs(seed.specs),
+      });
+
+      await db.variantPriceComponent.deleteMany({ where: { variantId: created.id } });
+      if (components.length > 0) {
+        // Belt and braces: the generator is built to reconcile, and this is
+        // what catches it if someone changes it so that it does not.
+        assertBreakdownReconciles(components, exTaxPriceMinor);
+        await db.variantPriceComponent.createMany({
+          data: components.map((component) => ({ ...component, variantId: created.id })),
+        });
+        // The weight the breakdown charges for is the weight the piece has.
+        await db.productVariant.update({
+          where: { id: created.id },
+          data: { weightGrams },
+        });
+      }
     }
   }
 

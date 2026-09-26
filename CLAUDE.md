@@ -34,6 +34,13 @@ the whole domain liftable into a standalone service later.
   processing so replays are no-ops.
 - **Stock is protected by one conditional `UPDATE`**, not by read-then-write.
   Anything that decrements inventory must be atomic in a single statement.
+- **Authorization is written as "may this caller act", never as a list of
+  rejections.** `a && b && a !== b` reads like a check and collapses to `false`
+  the moment either side is null. `callerOwnsOrder` in `server/payments` is the
+  shape to copy.
+- **Side effects go outside the transaction.** Emails, provider calls and cache
+  invalidation happen after the commit — a mail provider being down must never
+  roll back an order.
 - **Orders are immutable snapshots.** Editing a product must never change what
   an old order says.
 - **Scope every account query by owner in the `where` clause.** Never fetch by
@@ -55,9 +62,35 @@ presentation, not authorization.
 **A new facet** — it is data, not a migration: add an `Attribute` and its
 `AttributeValue` rows, then add the code to `FACET_CODES`.
 
+**A price breakdown** — the components must sum to the ex-tax price exactly.
+`assertBreakdownReconciles` on the write path, and the renderer drops a
+breakdown that does not add up rather than showing a wrong one. Never recompute
+GST there; take it from `priceOrder`.
+
+**A customer-facing claim about policy** (returns, resizing, certification) —
+link to the policy page rather than restating it, and check the wording against
+that page. Two copies of a promise drift, and the customer finds out at the
+moment they are relying on it.
+
+**Anything that sends mail on a visitor's say-so** — rate limit it twice: once
+per browser and once per target address. A rotating IP otherwise turns the
+endpoint into a way to bury somebody's inbox. `notifyWhenBackInStockAction` is
+the worked example.
+
 **A new product field that customers filter on** — think twice. Filterable
 things belong in the attribute tables; display-only things belong in
 `ProductSpec`. A new column is for something on nearly every query.
+
+**A unique index over anything nullable** — it will not do what you expect.
+Postgres treats NULL as distinct from NULL, so `@@unique([a, b, nullableC])`
+permits unlimited rows where `nullableC` is null. Carry a non-null key column
+beside it (`CartItem.engravingKey` collapses absent to `''`) and add a CHECK
+constraint keeping the two in lockstep, so no call site can set one without
+the other.
+
+**Never migrate the dev database while an e2e run is using it.** Changing a
+unique index under a running server makes the app fail in ways that look like
+product bugs; two runs were thrown away learning this.
 
 **A schema change** — `pnpm db:migrate`. If you hand-edit the SQL, remember that
 Prisma cannot see generated columns, so anything it cannot describe needs a
@@ -65,6 +98,13 @@ matching declaration in `schema.prisma` or it will try to drop it.
 
 ## Testing
 
+- **A regression test must fail on the bug it names.** Write it, then put the
+  bug back and watch it fail. A negative test that has never failed is not
+  evidence of anything — the layout-shift budgets in `e2e/performance.spec.ts`
+  passed happily with the defect reinstated, which is why the real guard there
+  asserts a structural property instead.
+- Prefer asserting the property that makes a defect impossible over observing
+  the defect. Timing-dependent symptoms make flaky gates.
 - Unit tests for pure logic — money, pricing, the state machine, redirects.
 - Integration tests against **real Postgres** for anything whose correctness is
   the database's: atomic reservation, transactional order creation,

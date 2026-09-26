@@ -43,14 +43,13 @@ export async function simulateFakePaymentAction(
     const data = parseInput(simulateSchema, input);
     const { user } = await getAuthContext();
 
-    // Same ownership rule as the real callback: the signed-in owner, or the
-    // browser that started this checkout.
-    if (!user && !(await hasCheckoutClaim(data.orderId))) {
-      throw forbidden();
-    }
-
     const { payment, signature } = provider.simulatePayment(data.providerOrderId, data.outcome);
 
+    // Ownership is decided by `verifyCheckoutCallback` alone. The previous
+    // pre-check here (`!user && !hasCheckoutClaim`) waved through any
+    // signed-in caller regardless of whose order it was, which mattered
+    // because this simulator mints its own valid signature — the binding that
+    // protects the real callback is absent by design.
     const result = await verifyCheckoutCallback(
       {
         orderId: data.orderId,
@@ -58,7 +57,10 @@ export async function simulateFakePaymentAction(
         providerPaymentId: payment.providerPaymentId,
         signature,
       },
-      user?.id ?? null,
+      {
+        userId: user?.id ?? null,
+        hasCheckoutClaim: await hasCheckoutClaim(data.orderId),
+      },
     );
 
     // Deliver the webhook too, so local development exercises the path that

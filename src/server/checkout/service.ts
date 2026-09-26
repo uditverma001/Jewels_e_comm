@@ -327,6 +327,10 @@ export async function createOrder(owner: CartOwner, input: CheckoutInput): Promi
         shippingMethodCode: shipping.code,
         shippingMethodName: shipping.name,
         customerNote: input.customerNote || null,
+        giftWrap: input.giftWrap ?? false,
+        // `|| null` rather than `?? null`: an empty string is the same request
+        // as no message, and a blank card is worse than none.
+        giftMessage: input.giftMessage || null,
         items: {
           create: cart.items.map((item, index) => {
             const line = priced.lines[index]!;
@@ -349,6 +353,10 @@ export async function createOrder(owner: CartOwner, input: CheckoutInput): Promi
               taxRateBps: line.taxRateBps,
               lineTaxMinor: line.lineTaxMinor,
               lineTotalMinor: line.lineTotalMinor,
+              // Snapshotted like everything else here: this is what the bench
+              // cuts, and an engraved piece cannot be returned, so it must not
+              // be possible for it to change after the order is placed.
+              engravingText: item.engravingText,
             };
           }),
         },

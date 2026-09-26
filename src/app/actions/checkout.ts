@@ -120,7 +120,10 @@ export async function confirmPaymentAction(
     const data = parseInput(verifyPaymentSchema, input);
     const { user } = await getAuthContext();
 
-    const result = await verifyCheckoutCallback(data, user?.id ?? null);
+    const result = await verifyCheckoutCallback(data, {
+      userId: user?.id ?? null,
+      hasCheckoutClaim: await hasCheckoutClaim(data.orderId),
+    });
 
     revalidatePath('/cart');
     revalidatePath('/', 'layout');
