@@ -407,7 +407,7 @@ export const PRODUCTS: SeedProduct[] = [
       material: 'Handcrafted',
     },
     specs: [
-      { label: 'Centre stone', value: '2.10ct Zambian emerald' },
+      { label: 'Centre stone', value: '2.10ct Zambian emerald, minor oil' },
       { label: 'Halo', value: '0.35ct brilliants' },
       { label: 'Setting', value: 'Closed-back bezel' },
       { label: 'Chain', value: '45 cm 18K cable, included' },

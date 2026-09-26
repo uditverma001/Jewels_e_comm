@@ -1,7 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
-import { env } from '@/env';
 import { forbidden, notFound, paymentFailed } from '@/server/errors';
 import {
   getPaymentProvider,
@@ -13,6 +12,7 @@ import { recordRedemption } from '@/server/coupons/service';
 import { sendEmailSafely } from '@/server/integrations/email';
 import { orderConfirmationEmail } from '@/server/integrations/email/templates';
 import { canTransitionOrder, canTransitionPayment } from '@/server/orders/state-machine';
+import { orderUrlFor } from '@/server/orders/links';
 import type { VerifyPaymentInput } from '@/server/checkout/schema';
 
 /**
@@ -442,16 +442,7 @@ async function sendConfirmationEmail(orderId: string): Promise<void> {
       to: order.email,
       firstName: order.user?.firstName ?? 'there',
       orderNumber: order.orderNumber,
-      /*
-       * A guest has no account, so `/account/orders/…` is a door that never
-       * opens for them: the route is session-gated and the query is scoped by
-       * user id. Every guest confirmation used to link there. The tracking
-       * page takes the order number and the address this email was sent to,
-       * which the recipient has by definition.
-       */
-      orderUrl: order.userId
-        ? `${env.APP_URL}/account/orders/${order.orderNumber}`
-        : `${env.APP_URL}/orders/track?order=${encodeURIComponent(order.orderNumber)}`,
+      orderUrl: orderUrlFor(order),
       lines: order.items.map((item) => ({
         name: item.productName,
         variantLabel: item.variantLabel,

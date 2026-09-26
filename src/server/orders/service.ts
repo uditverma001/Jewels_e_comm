@@ -1,12 +1,12 @@
 import 'server-only';
 import type { OrderStatus, Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
-import { env } from '@/env';
 import { conflict, forbidden, notFound, validationError } from '@/server/errors';
 import { releaseReservations, restock } from '@/server/inventory/service';
 import { releaseRedemption } from '@/server/coupons/service';
 import { sendEmailSafely } from '@/server/integrations/email';
 import { orderStatusEmail } from '@/server/integrations/email/templates';
+import { orderUrlFor } from './links';
 import { getPaymentProvider } from '@/server/integrations/payments';
 import {
   canTransitionOrder,
@@ -273,7 +273,8 @@ export async function updateOrderStatus(params: {
         to: order.email,
         firstName: order.user?.firstName ?? 'there',
         orderNumber: order.orderNumber,
-        orderUrl: `${env.APP_URL}/account/orders/${order.orderNumber}`,
+        // Same rule as the confirmation: a guest has no account to open.
+        orderUrl: orderUrlFor(order),
         headline: template.headline,
         message: template.message,
         trackingUrl: params.tracking?.trackingUrl ?? null,
