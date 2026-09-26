@@ -583,6 +583,34 @@ lockstep with the text so no call site can get it wrong.
 The non-returnable warning appears on the product page as the text is typed,
 not at checkout: that sentence is only fair where the decision is made.
 
+**Guest order tracking.** Every guest confirmation email linked to
+`/account/orders/…`, which is session-gated and scoped by user id — so the
+"View your order" button went to sign-in and then showed nothing, because the
+order has no account to belong to. `findGuestOrder` existed in
+`server/orders/service.ts` from the original build and had never been called
+by anything, which is the shape of a feature that was intended and forgotten.
+
+`/orders/track` is the door that link should always have opened. Both halves
+are in the `where` clause, never fetched-then-checked, and it refuses
+account-owned orders outright — those have a stronger door already, and an
+email address must not become a weaker second one. Failure returns the same
+message whether the order does not exist or the address does not match, so it
+cannot be used to discover which order numbers are real, and the rate limit is
+keyed on the order number as well as the browser, because the number is the
+thing being probed.
+
+Access is remembered in an httpOnly cookie holding order ids, so the page
+survives a reload; the ids are the permission and the database is always the
+content. An earlier draft listed the fifty newest guest orders and filtered
+them by that cookie, which would have hidden any older order entirely — a
+customer's order silently vanishing rather than a page that says nothing.
+
+**The confirmation email** now states the engraving, the gift wrap and its card
+message, and the dispatch window — 7–10 working days when something is being
+engraved, which is what the shipping policy already promised it would say. For
+a non-returnable personalisation the email is the customer's only durable
+record of what they asked for.
+
 ---
 
 ## 13. Explicit assumptions

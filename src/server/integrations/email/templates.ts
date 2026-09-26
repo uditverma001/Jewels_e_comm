@@ -87,6 +87,15 @@ export interface OrderEmailLine {
   variantLabel: string;
   quantity: number;
   lineTotalMinor: number;
+  /**
+   * What is being cut into this piece.
+   *
+   * In the email because it is the customer's durable record of a decision
+   * they cannot take back — an engraved piece is non-returnable, so "what did
+   * I actually ask for?" needs an answer that does not depend on them still
+   * being signed in.
+   */
+  engravingText?: string | null;
 }
 
 export function orderConfirmationEmail(params: {
@@ -100,18 +109,46 @@ export function orderConfirmationEmail(params: {
   taxMinor: number;
   shippingMinor: number;
   totalMinor: number;
+  giftWrap?: boolean;
+  giftMessage?: string | null;
 }): EmailMessage {
   const rows = params.lines
     .map(
       (line) => `<tr>
         <td style="padding:8px 0;border-bottom:1px solid #f0ebe4">
           ${escapeHtml(line.name)}<br>
-          <span style="color:#8a7a63;font-size:13px">${escapeHtml(line.variantLabel)} · Qty ${line.quantity}</span>
+          <span style="color:#8a7a63;font-size:13px">${escapeHtml(line.variantLabel)} · Qty ${line.quantity}</span>${
+            line.engravingText
+              ? `<br><span style="color:#6d655c;font-size:13px">Engraved: <em>${escapeHtml(line.engravingText)}</em></span>`
+              : ''
+          }
         </td>
         <td style="padding:8px 0;border-bottom:1px solid #f0ebe4;text-align:right;white-space:nowrap">${formatMinor(line.lineTotalMinor)}</td>
       </tr>`,
     )
     .join('');
+
+  const hasEngraving = params.lines.some((line) => line.engravingText);
+
+  /*
+   * The dispatch expectation. `content/pages.ts` tells customers that
+   * "the product page says so before you buy, and your confirmation email
+   * repeats the expected date" — this is the half of that promise the email
+   * owes. Stated as a window rather than a date because dispatch is what we
+   * control; the courier's leg is quoted on the product page against a PIN
+   * code.
+   */
+  const dispatchNote = hasEngraving
+    ? '<p style="color:#6d655c;font-size:13px">One or more pieces are being engraved by hand, so this order dispatches in <strong>7–10 working days</strong> rather than the usual two. Engraved pieces cannot be returned.</p>'
+    : '<p style="color:#6d655c;font-size:13px">We dispatch within two working days, insured and signature-on-delivery.</p>';
+
+  const giftNote = params.giftWrap
+    ? `<p style="color:#6d655c;font-size:13px">Wrapped as a gift — no prices are included in the parcel.${
+        params.giftMessage
+          ? ` Your card reads: <em>${escapeHtml(params.giftMessage)}</em>`
+          : ' No card message was added.'
+      }</p>`
+    : '';
 
   const totalsRow = (label: string, amount: number, strong = false) =>
     `<tr>
@@ -131,6 +168,8 @@ export function orderConfirmationEmail(params: {
       ${totalsRow('Shipping', params.shippingMinor)}
       ${totalsRow('Total', params.totalMinor, true)}
     </table>
+    ${giftNote}
+    ${dispatchNote}
     ${button(params.orderUrl, 'View your order')}`;
 
   const textLines = params.lines

@@ -442,18 +442,30 @@ async function sendConfirmationEmail(orderId: string): Promise<void> {
       to: order.email,
       firstName: order.user?.firstName ?? 'there',
       orderNumber: order.orderNumber,
-      orderUrl: `${env.APP_URL}/account/orders/${order.orderNumber}`,
+      /*
+       * A guest has no account, so `/account/orders/…` is a door that never
+       * opens for them: the route is session-gated and the query is scoped by
+       * user id. Every guest confirmation used to link there. The tracking
+       * page takes the order number and the address this email was sent to,
+       * which the recipient has by definition.
+       */
+      orderUrl: order.userId
+        ? `${env.APP_URL}/account/orders/${order.orderNumber}`
+        : `${env.APP_URL}/orders/track?order=${encodeURIComponent(order.orderNumber)}`,
       lines: order.items.map((item) => ({
         name: item.productName,
         variantLabel: item.variantLabel,
         quantity: item.quantity,
         lineTotalMinor: item.lineTotalMinor,
+        engravingText: item.engravingText,
       })),
       subtotalMinor: order.subtotalMinor,
       discountMinor: order.discountMinor,
       taxMinor: order.taxMinor,
       shippingMinor: order.shippingMinor,
       totalMinor: order.totalMinor,
+      giftWrap: order.giftWrap,
+      giftMessage: order.giftMessage,
     }),
   );
 }

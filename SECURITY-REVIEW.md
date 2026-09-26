@@ -185,6 +185,34 @@ Worth recording, because "we looked" is information:
 
 ---
 
+## Added since: guest order lookup
+
+`/orders/track` is a new unauthenticated surface that returns order contents,
+so it is worth stating how it is bounded.
+
+- **Both halves in the `where` clause.** Order number and email are matched
+  together; nothing is fetched and then checked.
+- **Account orders are refused outright.** They are reachable through a session
+  already, and an email address must not become a weaker second door into them.
+- **One failure message.** "No such order" and "wrong address" are
+  indistinguishable, so the endpoint cannot be used to enumerate order numbers.
+- **The format is validated before the database.** Only `AU\d{4}-[A-Z0-9]{6}`
+  reaches a query or spends a rate-limit budget.
+- **Rate limited on the order number, not only the browser** — 8 per 15 minutes
+  per number. The number travels on packing slips and in forwarded email, so it
+  is the thing an attacker would probe addresses against.
+- **Access is a cookie of ids, never content.** httpOnly, 30 days, capped at
+  ten; the order is re-read from the database on every render.
+
+Residual: an order number plus the buyer's email address is a weak pair, and
+someone holding both — a household member, anyone forwarded the confirmation —
+can see the order. That is the same exposure as the email itself, and the
+alternative (a signed one-time link) trades it for a link that cannot be used
+twice or from a second device. The rate limit is what keeps it from being
+brute-forced rather than merely shared.
+
+---
+
 ## Residual risk
 
 - The public catalogue keeps `'unsafe-inline'` in `script-src` (finding 3). Closing it means giving

@@ -65,28 +65,41 @@ export async function listOrdersForUser(userId: string, take = 20, skip = 0) {
 }
 
 /** Ownership is part of the query, never a check performed afterwards. */
-export async function findOrderForUser(
-  orderNumber: string,
-  userId: string,
-): Promise<OrderDetail | null> {
-  return db.order.findFirst({
-    where: { orderNumber, userId },
-    include: ORDER_DETAIL_INCLUDE,
-  });
-}
-
 /**
- * Look up a guest order by number + the email it was placed with.
+ * Look up a guest's order from the two things they have: the number on their
+ * confirmation, and the address it was sent to.
  *
- * Two secrets rather than one: an order number alone is not enough, which
- * matters because order numbers appear in emails and on packing slips.
+ * Both are in the `where` clause, never fetched-then-checked. An order number
+ * alone is not a secret — it appears on packing slips and in forwarded emails
+ * — so the email address is what turns a guessable identifier into a
+ * credential of sorts. It is a weak one, which is why the action in front of
+ * this is rate limited: it is a lookup for the person who already has both
+ * halves, not an authentication mechanism.
+ *
+ * Deliberately refuses an order that belongs to an account. Those have a
+ * stronger door already, and letting an email address open them would weaken
+ * it to whatever the weaker path allows.
  */
 export async function findGuestOrder(
   orderNumber: string,
   email: string,
 ): Promise<OrderDetail | null> {
   return db.order.findFirst({
-    where: { orderNumber, email: email.trim().toLowerCase() },
+    where: {
+      orderNumber: orderNumber.trim().toUpperCase(),
+      email: email.trim().toLowerCase(),
+      userId: null,
+    },
+    include: ORDER_DETAIL_INCLUDE,
+  });
+}
+
+export async function findOrderForUser(
+  orderNumber: string,
+  userId: string,
+): Promise<OrderDetail | null> {
+  return db.order.findFirst({
+    where: { orderNumber, userId },
     include: ORDER_DETAIL_INCLUDE,
   });
 }

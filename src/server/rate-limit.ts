@@ -54,6 +54,10 @@ export const RATE_LIMITS = {
   // Pincode checks are cheap and read-only, but unauthenticated. Generous
   // enough that someone typing, deleting and retyping never notices.
   deliveryCheck: { limit: 40, windowSeconds: 300 },
+  // Guest order lookup. Applied per browser AND per order number: the number
+  // travels on packing slips and in forwarded mail, so the limit that matters
+  // is the one scoped to the thing being probed.
+  orderLookup: { limit: 8, windowSeconds: 900 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
