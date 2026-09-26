@@ -546,6 +546,25 @@ Wrapping is free, which is both authentic for the category and the reason it
 does not touch `priceOrder` — a charge would have to go through the pricing
 engine rather than be bolted on beside it.
 
+**Performance.** Measured on a throttled mid-range phone (4× CPU, slow 4G)
+rather than assumed. LCP is under 1s on every page and the shared bundle is
+103 kB, but the product page measured **CLS 0.186** — nearly twice the "poor"
+threshold — while every other page measured 0.000, so nothing in the aggregate
+pointed at it.
+
+The cause was the breadcrumb: it wrapped to two lines in the metric-adjusted
+fallback font and reflowed to one when the web font swapped in, moving
+everything below it 22px up. It now cannot wrap — one line, scrolling sideways
+on a phone, which is the better layout there anyway. CLS 0.186 → 0.000.
+
+`e2e/performance.spec.ts` guards this in two ways, because the obvious way
+does not work: reverting the fix and re-running the vitals budgets **did not
+reliably fail them**, since whether the shift happens depends on whether the
+font lands before or after first paint. The budgets are kept as a coarse guard
+and labelled as one; the actual guard asserts the structural property — the
+trail is `nowrap` and one line high at 320px — which fails deterministically on
+the old markup.
+
 ---
 
 ## 13. Explicit assumptions

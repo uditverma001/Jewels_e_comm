@@ -87,6 +87,13 @@ matching declaration in `schema.prisma` or it will try to drop it.
 
 ## Testing
 
+- **A regression test must fail on the bug it names.** Write it, then put the
+  bug back and watch it fail. A negative test that has never failed is not
+  evidence of anything — the layout-shift budgets in `e2e/performance.spec.ts`
+  passed happily with the defect reinstated, which is why the real guard there
+  asserts a structural property instead.
+- Prefer asserting the property that makes a defect impossible over observing
+  the defect. Timing-dependent symptoms make flaky gates.
 - Unit tests for pure logic — money, pricing, the state machine, redirects.
 - Integration tests against **real Postgres** for anything whose correctness is
   the database's: atomic reservation, transactional order creation,
