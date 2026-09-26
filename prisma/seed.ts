@@ -253,6 +253,7 @@ async function seedProducts(taxonomy: Taxonomy) {
         status: 'ACTIVE',
         isFeatured: seed.isFeatured ?? false,
         isBestSeller: seed.isBestSeller ?? false,
+        engravingMaxLength: seed.engravingMaxLength ?? null,
       },
       create: {
         name: seed.name,
@@ -268,6 +269,7 @@ async function seedProducts(taxonomy: Taxonomy) {
         collectionId: seed.collection ? (collectionIds.get(seed.collection) ?? null) : null,
         basePriceMinor: seed.basePriceMinor,
         compareAtPriceMinor: seed.compareAtPriceMinor ?? null,
+        engravingMaxLength: seed.engravingMaxLength ?? null,
         tags: seed.tags,
         isFeatured: seed.isFeatured ?? false,
         isBestSeller: seed.isBestSeller ?? false,

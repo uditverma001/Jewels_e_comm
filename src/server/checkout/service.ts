@@ -353,6 +353,10 @@ export async function createOrder(owner: CartOwner, input: CheckoutInput): Promi
               taxRateBps: line.taxRateBps,
               lineTaxMinor: line.lineTaxMinor,
               lineTotalMinor: line.lineTotalMinor,
+              // Snapshotted like everything else here: this is what the bench
+              // cuts, and an engraved piece cannot be returned, so it must not
+              // be possible for it to change after the order is placed.
+              engravingText: item.engravingText,
             };
           }),
         },

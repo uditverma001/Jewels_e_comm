@@ -115,6 +115,8 @@ export interface ProductDetail {
   attributes: { code: string; name: string; value: string }[];
 
   totalAvailable: number;
+  /** Maximum engraving length, or null when the piece cannot be engraved. */
+  engravingMaxLength: number | null;
   /** GST rate for this product, resolved the same way checkout resolves it. */
   taxRateBps: number;
   /**

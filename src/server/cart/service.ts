@@ -29,6 +29,8 @@ export interface CartLineView {
   productName: string;
   productSlug: string;
   variantLabel: string;
+  /** What the customer asked to have cut into this piece, if anything. */
+  engravingText: string | null;
   sku: string;
   imageUrl: string | null;
   quantity: number;
@@ -266,6 +268,7 @@ export async function getCartView(
       productName: item.variant.product.name,
       productSlug: item.variant.product.slug,
       variantLabel: item.variant.label,
+      engravingText: item.engravingText,
       sku: item.variant.sku,
       imageUrl: item.variant.product.media[0]?.url ?? null,
       quantity: pricedLine.quantity,
@@ -373,9 +376,36 @@ async function resolveShipping(code: string | null): Promise<ShippingQuote | nul
   };
 }
 
+/**
+ * The value `engravingKey` must hold for a given engraving.
+ *
+ * Postgres treats NULL as distinct from NULL in a unique index, so the bag's
+ * "one line per variant" rule cannot be expressed over a nullable column —
+ * two plain lines of the same variant would both be permitted. Collapsing
+ * absent to '' is what makes the index work, and a CHECK constraint keeps the
+ * two columns in lockstep so this can never be forgotten at a call site.
+ */
+function engravingKeyFor(text: string | null): string {
+  return text ?? '';
+}
+
+/**
+ * Trim, collapse whitespace, strip control characters, and treat blank as
+ * absent. The text is cut into metal by hand from this string, so what is
+ * stored should be what a person can read off a worksheet.
+ */
+function normaliseEngraving(input: string | null | undefined): string | null {
+  if (input == null) return null;
+  const cleaned = input
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 export async function addItem(
   owner: CartOwner,
-  input: { variantId: string; quantity: number },
+  input: { variantId: string; quantity: number; engravingText?: string | null },
 ): Promise<void> {
   if (!Number.isInteger(input.quantity) || input.quantity < 1) {
     throw validationError('Choose a quantity of at least one.');
@@ -391,7 +421,10 @@ export async function addItem(
       deletedAt: null,
       product: { status: 'ACTIVE', deletedAt: null },
     },
-    include: { inventory: true, product: { select: { basePriceMinor: true, name: true } } },
+    include: {
+      inventory: true,
+      product: { select: { basePriceMinor: true, name: true, engravingMaxLength: true } },
+    },
   });
 
   if (!variant) throw notFound('That piece is no longer available.');
@@ -404,9 +437,25 @@ export async function addItem(
 
   if (available <= 0) throw outOfStock('That piece has just sold out.');
 
+  // Engraving is a property of the piece, so the shop decides whether it is
+  // offered and how long the text may be — never the client.
+  const engravingText = normaliseEngraving(input.engravingText);
+  if (engravingText) {
+    const limit = variant.product.engravingMaxLength;
+    if (!limit) {
+      throw validationError('This piece cannot be engraved.');
+    }
+    if (engravingText.length > limit) {
+      throw validationError(`Engraving is limited to ${limit} characters on this piece.`);
+    }
+  }
+  const engravingKey = engravingKeyFor(engravingText);
+
   const cart = await getOrCreateCart(owner);
   const existing = await db.cartItem.findUnique({
-    where: { cartId_variantId: { cartId: cart.id, variantId: input.variantId } },
+    where: {
+      cartId_variantId_engravingKey: { cartId: cart.id, variantId: input.variantId, engravingKey },
+    },
   });
 
   const lineCount = await db.cartItem.count({ where: { cartId: cart.id } });
@@ -429,12 +478,16 @@ export async function addItem(
   const unitPrice = variant.priceMinor ?? variant.product.basePriceMinor;
 
   await db.cartItem.upsert({
-    where: { cartId_variantId: { cartId: cart.id, variantId: input.variantId } },
+    where: {
+      cartId_variantId_engravingKey: { cartId: cart.id, variantId: input.variantId, engravingKey },
+    },
     create: {
       cartId: cart.id,
       variantId: input.variantId,
       quantity: input.quantity,
       addedUnitPriceMinor: unitPrice,
+      engravingText,
+      engravingKey,
     },
     update: { quantity: desired, addedUnitPriceMinor: unitPrice },
   });
@@ -519,14 +572,23 @@ export async function changeVariant(
   }
 
   const unitPrice = target.priceMinor ?? target.product.basePriceMinor;
+  // Changing size keeps whatever was to be engraved, so the line it might
+  // collide with is the one carrying the same text — not merely the same
+  // variant. Two size-14 signets reading different initials stay two lines.
   const duplicate = await db.cartItem.findUnique({
-    where: { cartId_variantId: { cartId: cart.id, variantId: input.variantId } },
+    where: {
+      cartId_variantId_engravingKey: {
+        cartId: cart.id,
+        variantId: input.variantId,
+        engravingKey: item.engravingKey,
+      },
+    },
   });
 
   await db.$transaction(async (tx) => {
     if (duplicate) {
-      // The target option is already in the bag: merge instead of failing on
-      // the (cartId, variantId) unique index.
+      // The target option is already in the bag with the same engraving:
+      // merge instead of failing on the unique index.
       const merged = Math.min(
         duplicate.quantity + item.quantity,
         Math.min(available, MAX_LINE_QUANTITY),
@@ -631,20 +693,31 @@ export async function mergeGuestCart(anonymousId: string, userId: string): Promi
       const available = availableByVariant.get(guestItem.variantId) ?? 0;
       if (available <= 0) continue;
 
+      // Merge on the engraving too: a guest line reading "A & R" must not be
+      // folded into an account line reading something else just because both
+      // are the same ring.
+      const key = {
+        cartId: userCart.id,
+        variantId: guestItem.variantId,
+        engravingKey: guestItem.engravingKey,
+      };
+
       const existing = await tx.cartItem.findUnique({
-        where: { cartId_variantId: { cartId: userCart.id, variantId: guestItem.variantId } },
+        where: { cartId_variantId_engravingKey: key },
       });
 
       const combined = (existing?.quantity ?? 0) + guestItem.quantity;
       const quantity = Math.min(combined, available, MAX_LINE_QUANTITY);
 
       await tx.cartItem.upsert({
-        where: { cartId_variantId: { cartId: userCart.id, variantId: guestItem.variantId } },
+        where: { cartId_variantId_engravingKey: key },
         create: {
           cartId: userCart.id,
           variantId: guestItem.variantId,
           quantity,
           addedUnitPriceMinor: guestItem.addedUnitPriceMinor,
+          engravingText: guestItem.engravingText,
+          engravingKey: guestItem.engravingKey,
         },
         update: { quantity },
       });

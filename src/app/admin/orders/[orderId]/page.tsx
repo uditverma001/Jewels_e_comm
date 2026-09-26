@@ -96,6 +96,14 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ ord
                       {item.variantLabel} · {item.sku} · {formatMinor(item.unitPriceMinor)} ×{' '}
                       {item.quantity}
                     </p>
+                    {/* Loud, because it is a manual step that cannot be undone
+                        and the piece cannot be returned once it is done. */}
+                    {item.engravingText ? (
+                      <p className="border-gold-400 text-ink-900 mt-1.5 border-l-2 pl-2 text-xs">
+                        <span className="text-stone-500">Engrave:</span>{' '}
+                        <span className="font-medium">{item.engravingText}</span>
+                      </p>
+                    ) : null}
                   </div>
                   <p className="shrink-0 text-sm tabular-nums">
                     {formatMinor(item.lineSubtotalMinor - item.lineDiscountMinor)}

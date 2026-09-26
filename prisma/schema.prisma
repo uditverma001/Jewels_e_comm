@@ -255,6 +255,13 @@ model Product {
   careInstructions String?
   tags             String[] @default([])
 
+  /// Maximum engraving length, or null when the piece cannot be engraved.
+  ///
+  /// A length rather than a boolean because the limit is physical — a signet
+  /// face takes more than a band shank — and a single flag would push that
+  /// number into the copy where nothing enforces it.
+  engravingMaxLength Int?
+
   isFeatured   Boolean @default(false)
   isBestSeller Boolean @default(false)
 
@@ -514,10 +521,24 @@ model CartItem {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  /// What to engrave, or null for a plain piece.
+  engravingText String?
+
+  /// `engravingText` normalised to '' when absent, solely so the unique index
+  /// below works.
+  ///
+  /// Postgres treats NULL as distinct from NULL in a unique index, so
+  /// `@@unique([cartId, variantId, engravingText])` would silently permit two
+  /// plain lines of the same variant — quantity 1 twice instead of quantity 2.
+  /// Collapsing null to an empty string is what makes "same variant, same
+  /// engraving" a single line while "same variant, different engraving"
+  /// remains two, which is the behaviour the bag needs.
+  engravingKey String @default("")
+
   cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
-  @@unique([cartId, variantId])
+  @@unique([cartId, variantId, engravingKey])
   @@index([variantId])
 }
 
@@ -823,6 +844,11 @@ model OrderItem {
   taxRateBps          Int  @default(0)
   lineTaxMinor        Int  @default(0)
   lineTotalMinor      Int
+
+  /// Engraved onto this piece. Part of the snapshot: what was asked for is
+  /// what the bench cuts, and it cannot change afterwards — nor can the piece
+  /// be returned, which is why it is recorded rather than inferred.
+  engravingText String?
 
   reviewed Boolean @default(false)
 

@@ -149,6 +149,11 @@ export default async function OrderDetailPage({
                 </p>
                 <p className="mt-0.5 text-xs text-stone-500">
                   {item.variantLabel} · {item.sku} · Qty {item.quantity}
+                  {item.engravingText ? (
+                    <span className="text-ink-800 mt-1 block">
+                      Engraved: <span className="italic">{item.engravingText}</span>
+                    </span>
+                  ) : null}
                 </p>
               </div>
               <p className="shrink-0 text-sm tabular-nums">

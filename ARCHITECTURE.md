@@ -565,6 +565,24 @@ and labelled as one; the actual guard asserts the structural property — the
 trail is `nowrap` and one line high at 320px — which fails deterministically on
 the old markup.
 
+**Engraving.** The catalogue already promised it — the signet's description
+says "Hand engraving is included", its specs list it, and the returns policy is
+written around it ("Engraved pieces cannot be returned... This is stated on the
+product page before you order"). There was no way to say what to cut, so the
+checkout note field was carrying it.
+
+The interesting part is not storing a string; it is what "the same item" means
+once a piece can be personalised. Two size-18 signets reading different
+initials are two lines; two reading the same are one line of quantity two. That
+cannot be expressed over a nullable column, because Postgres treats NULL as
+distinct from NULL — `@@unique([cartId, variantId, engravingText])` would
+silently permit two plain lines of the same variant. So `CartItem` carries an
+`engravingKey` that collapses absent to `''`, and a CHECK constraint keeps it in
+lockstep with the text so no call site can get it wrong.
+
+The non-returnable warning appears on the product page as the text is typed,
+not at checkout: that sentence is only fair where the decision is made.
+
 ---
 
 ## 13. Explicit assumptions

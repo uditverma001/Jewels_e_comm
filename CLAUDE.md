@@ -81,6 +81,17 @@ the worked example.
 things belong in the attribute tables; display-only things belong in
 `ProductSpec`. A new column is for something on nearly every query.
 
+**A unique index over anything nullable** — it will not do what you expect.
+Postgres treats NULL as distinct from NULL, so `@@unique([a, b, nullableC])`
+permits unlimited rows where `nullableC` is null. Carry a non-null key column
+beside it (`CartItem.engravingKey` collapses absent to `''`) and add a CHECK
+constraint keeping the two in lockstep, so no call site can set one without
+the other.
+
+**Never migrate the dev database while an e2e run is using it.** Changing a
+unique index under a running server makes the app fail in ways that look like
+product bugs; two runs were thrown away learning this.
+
 **A schema change** — `pnpm db:migrate`. If you hand-edit the SQL, remember that
 Prisma cannot see generated columns, so anything it cannot describe needs a
 matching declaration in `schema.prisma` or it will try to drop it.

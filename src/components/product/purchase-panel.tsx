@@ -13,6 +13,7 @@ import { BackInStock } from '@/components/product/back-in-stock';
 import { PriceBreakdown } from '@/components/product/price-breakdown';
 import { SizeGuide } from '@/components/product/size-guide';
 import { DeliveryCheck } from '@/components/product/delivery-check';
+import { EngravingField } from '@/components/product/engraving-field';
 import type { ProductDetail, VariantView } from '@/server/catalog/types';
 import { cn, pluralise } from '@/lib/utils';
 
@@ -46,6 +47,7 @@ export function PurchasePanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [justAdded, setJustAdded] = useState(false);
+  const [engraving, setEngraving] = useState('');
 
   /**
    * The mobile sticky bar appears once the real buy button has scrolled away.
@@ -104,7 +106,11 @@ export function PurchasePanel({
     }
 
     startTransition(async () => {
-      const result = await addToCartAction({ variantId: selectedVariant.id, quantity: 1 });
+      const result = await addToCartAction({
+        variantId: selectedVariant.id,
+        quantity: 1,
+        engravingText: engraving.trim() || undefined,
+      });
 
       if (!result.ok) {
         toast.error(result.error);
@@ -256,6 +262,14 @@ export function PurchasePanel({
           </Badge>
         )}
       </div>
+
+      {product.engravingMaxLength ? (
+        <EngravingField
+          value={engraving}
+          maxLength={product.engravingMaxLength}
+          onChange={setEngraving}
+        />
+      ) : null}
 
       <div className="space-y-2.5" ref={buyButtonRef}>
         <div className="flex gap-2.5">

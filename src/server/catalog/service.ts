@@ -198,6 +198,7 @@ async function loadProductBySlug(slug: string): Promise<ProductDetail | null> {
       value: pav.attributeValue.value,
     })),
     totalAvailable: variants.reduce((sum, v) => sum + v.availableQuantity, 0),
+    engravingMaxLength: product.engravingMaxLength,
     taxRateBps,
     priceBreakdowns: Object.fromEntries(breakdowns),
   };

@@ -250,3 +250,32 @@ test('the assurances beside the buy button match the policies they link to', asy
   // discovered at the moment a customer is relying on it.
   await expect(page.getByText(/fifteen days/i).first()).toBeVisible();
 });
+
+test('an engravable piece captures its text and warns that it cannot be returned', async ({
+  page,
+}) => {
+  await page.goto('/products/ravi-signet-ring');
+
+  // The warning appears only once there is something to engrave — shown to
+  // everyone it would be shown to nobody.
+  await expect(page.getByText(/cannot be returned/i)).toHaveCount(0);
+
+  await page.getByRole('button', { name: '18', exact: true }).click();
+  await page.fill('#engraving-text', 'A & R  1998');
+  await expect(page.getByText(/an engraved piece cannot be returned/i)).toBeVisible();
+
+  await page
+    .getByRole('button', { name: /add to bag/i })
+    .first()
+    .click();
+  await expect(page.getByText(/added to your bag/i)).toBeVisible({ timeout: 20_000 });
+
+  await page.goto('/cart');
+  // Whitespace collapsed: somebody reads this off a worksheet and cuts it.
+  await expect(page.getByText('A & R 1998')).toBeVisible();
+});
+
+test('a piece that is not engravable offers no engraving field', async ({ page }) => {
+  await page.goto('/products/anaya-diamond-stud');
+  await expect(page.locator('#engraving-text')).toHaveCount(0);
+});

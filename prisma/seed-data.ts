@@ -29,6 +29,8 @@ export interface SeedProduct {
   careInstructions: string;
   tags: string[];
   attributes: Record<string, string>;
+  /** Maximum engraving length, or omitted when the piece cannot be engraved. */
+  engravingMaxLength?: number;
   specs: { label: string; value: string }[];
   /** How many placeholder/production views this piece has. */
   imageCount: number;
@@ -423,6 +425,10 @@ export const PRODUCTS: SeedProduct[] = [
     audience: 'MEN',
     basePriceMinor: 8_900_000,
     shortDescription: 'A solid 22K signet with a brushed face, ready for engraving.',
+    // The description and specs already promise hand engraving; this is what
+    // lets a customer actually say what to cut. A 14mm oval face takes about
+    // this much.
+    engravingMaxLength: 20,
     description:
       'Substantial without being ostentatious: 11g of solid 22K, a 14mm oval face brushed rather than polished so it does not mirror every light in the room. The shank is squared on the inside, which stops it spinning on the finger.\n\nHand engraving is included — initials, a monogram or a family seal. Allow ten working days.',
     careInstructions:
