@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
+import { notifyRestocked } from '@/server/notifications/stock';
 import { env } from '@/env';
 import { outOfStock } from '@/server/errors';
 
@@ -213,7 +214,18 @@ export async function sweepExpiredReservations(): Promise<number> {
   });
 
   let released = 0;
+  // Variants whose holds we drop — releasing a reservation can take a piece
+  // from "spoken for" back to "buyable", which is exactly what somebody on the
+  // waiting list asked to hear about.
+  const freedVariantIds = new Set<string>();
+
   for (const { orderId } of expired) {
+    const held = await db.inventoryReservation.findMany({
+      where: { orderId, status: 'HELD' },
+      select: { variantId: true },
+    });
+    for (const { variantId } of held) freedVariantIds.add(variantId);
+
     await db.$transaction(async (tx) => {
       await releaseReservations(tx, orderId);
       // The order is dead too: it never got paid and its stock is gone.
@@ -228,6 +240,10 @@ export async function sweepExpiredReservations(): Promise<number> {
     });
     released += 1;
   }
+
+  // After the transactions, never inside them.
+  await notifyRestocked([...freedVariantIds]);
+
   return released;
 }
 
@@ -240,6 +256,15 @@ export async function setStock(
   if (!Number.isInteger(quantity) || quantity < 0) {
     throw new Error('Stock quantity must be a non-negative integer');
   }
+
+  // Read the previous level first: a restock notice should go out when a piece
+  // crosses from unavailable to available, not every time someone saves the
+  // inventory form at the same number.
+  const before = await db.inventory.findUnique({
+    where: { variantId },
+    select: { quantity: true, reserved: true },
+  });
+  const wasUnavailable = !before || before.quantity - before.reserved <= 0;
 
   await db.inventory.upsert({
     where: { variantId },
@@ -257,6 +282,12 @@ export async function setStock(
       ...(options?.allowBackorder != null ? { allowBackorder: options.allowBackorder } : {}),
     },
   });
+
+  if (wasUnavailable && quantity > 0) {
+    // Outside any transaction, and failure-tolerant: an unreachable mail
+    // provider must not roll back a stock correction an admin just made.
+    await notifyRestocked([variantId]);
+  }
 }
 
 export async function findLowStock(limit = 10) {

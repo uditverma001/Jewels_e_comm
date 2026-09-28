@@ -431,3 +431,125 @@ describe('coupons on the cart', () => {
     );
   });
 });
+
+/**
+ * Engraving.
+ *
+ * The interesting part is not storing a string, it is what "the same item"
+ * means once a piece can be personalised. Two size-18 signets reading
+ * different initials are two lines; two reading the same are one line of
+ * quantity two. That distinction lives in a unique index over a column that
+ * has to be kept in step with a nullable one, so it gets tested from both
+ * ends: through the service, and against the constraint underneath it.
+ */
+describe('engraving', () => {
+  async function engravableVariant(maxLength: number | null = 20) {
+    const { product, variants } = await createProduct({
+      basePriceMinor: 5_000_000,
+      variants: [{ label: 'Size 18', quantity: 10 }],
+    });
+    await testDb.product.update({
+      where: { id: product.id },
+      data: { engravingMaxLength: maxLength },
+    });
+    return variants[0]!.id;
+  }
+
+  it('keeps differently engraved pieces as separate lines', async () => {
+    const owner = { anonymousId: 'guest-engraving' };
+    const variantId = await engravableVariant();
+
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: 'A & R' });
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: 'For Papa' });
+
+    const bag = await cart.getCartView(owner);
+    expect(bag.lines).toHaveLength(2);
+    expect(bag.lines.map((item) => item.engravingText).sort()).toEqual(['A & R', 'For Papa']);
+  });
+
+  it('merges identically engraved pieces into one line', async () => {
+    const owner = { anonymousId: 'guest-engraving-merge' };
+    const variantId = await engravableVariant();
+
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: 'A & R' });
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: 'A & R' });
+
+    const bag = await cart.getCartView(owner);
+    expect(bag.lines).toHaveLength(1);
+    expect(bag.lines[0]!.quantity).toBe(2);
+  });
+
+  it('still merges plain pieces, which nullable-key uniqueness would not', async () => {
+    // Postgres treats NULL as distinct from NULL, so keying the index on the
+    // nullable text directly would leave two lines of quantity 1 here. This
+    // is the case `engravingKey` exists for.
+    const owner = { anonymousId: 'guest-plain' };
+    const variantId = await engravableVariant();
+
+    await cart.addItem(owner, { variantId, quantity: 1 });
+    await cart.addItem(owner, { variantId, quantity: 1 });
+
+    const bag = await cart.getCartView(owner);
+    expect(bag.lines).toHaveLength(1);
+    expect(bag.lines[0]!.quantity).toBe(2);
+    expect(bag.lines[0]!.engravingText).toBeNull();
+  });
+
+  it('treats a blank engraving as no engraving', async () => {
+    const owner = { anonymousId: 'guest-blank' };
+    const variantId = await engravableVariant();
+
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: '   ' });
+    await cart.addItem(owner, { variantId, quantity: 1 });
+
+    const bag = await cart.getCartView(owner);
+    expect(bag.lines).toHaveLength(1);
+    expect(bag.lines[0]!.engravingText).toBeNull();
+  });
+
+  it('collapses whitespace rather than storing it as typed', async () => {
+    const owner = { anonymousId: 'guest-ws' };
+    const variantId = await engravableVariant();
+
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: '  A   &\tR  ' });
+
+    const bag = await cart.getCartView(owner);
+    // Somebody reads this off a worksheet and cuts it by hand.
+    expect(bag.lines[0]!.engravingText).toBe('A & R');
+  });
+
+  it('refuses engraving on a piece that does not offer it', async () => {
+    const owner = { anonymousId: 'guest-no-engraving' };
+    const variantId = await engravableVariant(null);
+
+    await expect(
+      cart.addItem(owner, { variantId, quantity: 1, engravingText: 'A & R' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+
+  it('enforces the length the product allows, not the one the client sends', async () => {
+    const owner = { anonymousId: 'guest-too-long' };
+    const variantId = await engravableVariant(10);
+
+    await expect(
+      cart.addItem(owner, { variantId, quantity: 1, engravingText: 'far too many characters' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+
+  it('will not let the key drift from the text', async () => {
+    // The unique index is over `engravingKey`; if it can disagree with
+    // `engravingText`, the bag silently splits or merges lines. The database
+    // refuses, so no call site can get this wrong.
+    const owner = { anonymousId: 'guest-drift' };
+    const variantId = await engravableVariant();
+    await cart.addItem(owner, { variantId, quantity: 1, engravingText: 'A & R' });
+
+    const bag = await cart.getCartView(owner);
+    await expect(
+      testDb.cartItem.update({
+        where: { id: bag.lines[0]!.id },
+        data: { engravingKey: 'something else' },
+      }),
+    ).rejects.toThrow();
+  });
+});

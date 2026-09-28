@@ -127,13 +127,25 @@ export default async function AccountOverviewPage() {
   );
 }
 
+/**
+ * One stat in the account summary.
+ *
+ * The term/description pair must be the direct content of the `<div>` inside
+ * the `<dl>` — an `<a>` wrapped around them is invalid, and the cost is not
+ * pedantic: a `<dl>` whose children are links is not exposed as a description
+ * list at all, so a screen reader loses the term–value pairing that is the
+ * entire point of the markup. The link is made whole-tile with a stretched
+ * pseudo-element instead, which keeps one link in the tab order.
+ */
 function SummaryTile({ label, value, href }: { label: string; value: number; href: string }) {
   return (
-    <div className="bg-[var(--page)]">
-      <Link href={href} className="hover:bg-ivory-100 block p-5 text-center transition-colors">
-        <dt className="text-[0.6875rem] tracking-[0.14em] text-stone-500 uppercase">{label}</dt>
-        <dd className="font-display mt-1.5 text-2xl">{value}</dd>
-      </Link>
+    <div className="hover:bg-ivory-100 relative bg-[var(--page)] p-5 text-center transition-colors">
+      <dt className="text-[0.6875rem] tracking-[0.14em] text-stone-500 uppercase">
+        <Link href={href} className="after:absolute after:inset-0 after:content-['']">
+          {label}
+        </Link>
+      </dt>
+      <dd className="font-display mt-1.5 text-2xl">{value}</dd>
     </div>
   );
 }

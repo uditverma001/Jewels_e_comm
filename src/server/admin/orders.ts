@@ -42,6 +42,9 @@ export async function listAdminOrders(filters: AdminOrderFilters) {
         totalMinor: true,
         refundedMinor: true,
         createdAt: true,
+        // Surfaced in the list so the packing bench can spot gift orders
+        // without opening each one.
+        giftWrap: true,
         user: { select: { firstName: true, lastName: true } },
         _count: { select: { items: true } },
       },

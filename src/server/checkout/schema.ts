@@ -83,6 +83,25 @@ export const checkoutSchema = z.object({
   billingAddress: addressInputSchema.optional(),
   shippingMethodCode: z.string().trim().min(1).max(40),
   customerNote: z.string().trim().max(500).optional().or(z.literal('')),
+
+  /**
+   * Complimentary gift packaging. Free, as it is at every jeweller worth
+   * buying from, which is also why it does not touch `priceOrder` — a charge
+   * would have to go through the pricing engine rather than be added here.
+   */
+  giftWrap: z.coerce.boolean().optional(),
+  /**
+   * Written onto a card by hand. Newlines are collapsed because the card is a
+   * single field, and control characters are stripped because this string is
+   * printed by the packing bench.
+   */
+  giftMessage: z
+    .string()
+    .trim()
+    .max(200, 'A gift message can be up to 200 characters.')
+    .transform((value) => value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' '))
+    .optional()
+    .or(z.literal('')),
   /** Existing saved address chosen instead of a typed one. */
   shippingAddressId: z.string().min(1).max(40).optional(),
 });
@@ -104,4 +123,14 @@ export const abandonCheckoutSchema = z.object({
 
 export const quoteCheckoutSchema = z.object({
   shippingMethodCode: z.string().trim().min(1).max(40),
+  /**
+   * Where it is going, when the form has got that far.
+   *
+   * Optional because the customer picks a delivery method before finishing the
+   * address, and a quote should not refuse to render for want of a PIN code.
+   * Supplying it lets the quote refuse a method that cannot be performed there
+   * while the customer is still on the form, rather than at the moment they
+   * press pay.
+   */
+  postalCode: postalCodeSchema.optional(),
 });

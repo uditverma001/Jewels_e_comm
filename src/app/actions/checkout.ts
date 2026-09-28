@@ -45,7 +45,7 @@ export async function quoteCheckoutAction(input: unknown): Promise<
     await assertSameOrigin();
     const data = parseInput(quoteCheckoutSchema, input);
     const owner = await getCartOwner({ create: false });
-    const summary = await getCheckoutSummary(owner, data.shippingMethodCode);
+    const summary = await getCheckoutSummary(owner, data.shippingMethodCode, data.postalCode);
 
     return success({
       subtotalMinor: summary.subtotalMinor,
@@ -120,7 +120,10 @@ export async function confirmPaymentAction(
     const data = parseInput(verifyPaymentSchema, input);
     const { user } = await getAuthContext();
 
-    const result = await verifyCheckoutCallback(data, user?.id ?? null);
+    const result = await verifyCheckoutCallback(data, {
+      userId: user?.id ?? null,
+      hasCheckoutClaim: await hasCheckoutClaim(data.orderId),
+    });
 
     revalidatePath('/cart');
     revalidatePath('/', 'layout');

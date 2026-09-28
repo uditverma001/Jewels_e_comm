@@ -27,6 +27,9 @@ export function SectionHeader({
     <div
       className={cn(
         'mb-8 flex flex-col gap-3 lg:mb-10',
+        // Every section announces itself the same way as it scrolls in, which
+        // is what makes the page feel composed rather than decorated.
+        'reveal',
         align === 'left'
           ? 'sm:flex-row sm:items-end sm:justify-between'
           : 'items-center text-center',

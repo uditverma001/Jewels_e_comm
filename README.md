@@ -136,9 +136,12 @@ be lifted into a standalone API without a rewrite.
 ## Going to production
 
 1. **Database** — run `pnpm db:deploy` as a release step.
-2. **Secrets** — set every variable in `.env.example`. `SESSION_SECRET` should be
-   32+ random bytes (`openssl rand -base64 48`). The app will not boot with a
-   placeholder.
+2. **Secrets** — set every variable in `.env.example`. `SESSION_SECRET` and
+   `MAINTENANCE_TOKEN` should each be 32+ random bytes (`openssl rand -base64
+48`) and **must differ from each other** — the app refuses to boot otherwise,
+   because the maintenance token lives in your scheduler's configuration and
+   should not also unlock anything else. The app will not boot with a
+   placeholder either.
 3. **Payments** — set `PAYMENT_PROVIDER=razorpay` with its key, secret and
    webhook secret, and point the Razorpay webhook at
    `https://your-domain/api/webhooks/razorpay` for `payment.captured`,
@@ -146,11 +149,16 @@ be lifted into a standalone API without a rewrite.
 4. **Storage** — set `STORAGE_DRIVER=s3` with a bucket and a public CDN URL.
 5. **Email** — set `EMAIL_DRIVER=resend` with an API key and a verified `EMAIL_FROM`.
 6. **Scheduled maintenance** — `POST /api/maintenance` every few minutes with
-   `Authorization: Bearer $SESSION_SECRET`. It releases expired stock
-   reservations and sweeps rate-limit counters. **Without it, abandoned
-   checkouts hold stock indefinitely.**
+   `Authorization: Bearer $MAINTENANCE_TOKEN`. It releases expired stock
+   reservations (sending any back-in-stock notices that frees up) and sweeps
+   rate-limit counters. **Without it, abandoned checkouts hold stock
+   indefinitely.**
 7. **Health** — point your load balancer at `GET /api/health`, which checks the
    database.
+8. **Domains** — `APP_URL` must be the origin customers actually browse, because
+   the CSRF check trusts only it. If you serve more than one hostname (apex and
+   `www`, a staging alias), list the others in `ADDITIONAL_ORIGINS`, comma
+   separated. Get this wrong and every form submission returns 403.
 
 ---
 

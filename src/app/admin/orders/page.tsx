@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Gift } from 'lucide-react';
 import Link from 'next/link';
 import { z } from 'zod';
 import { listAdminOrders } from '@/server/admin/orders';
@@ -116,8 +117,18 @@ export default async function AdminOrdersPage({
                     >
                       {order.orderNumber}
                     </Link>
-                    <span className="mt-0.5 block text-xs text-stone-500">
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-500">
                       {order._count.items} {pluralise(order._count.items, 'item')}
+                      {/* Flagged in the list, not only on the order itself:
+                          the packing bench works from this screen, and a gift
+                          order they have to open to discover is one they will
+                          eventually pack with an invoice in it. */}
+                      {order.giftWrap ? (
+                        <span className="text-gold-600 inline-flex items-center gap-1">
+                          <Gift className="h-3 w-3" strokeWidth={1.5} aria-hidden="true" />
+                          Gift
+                        </span>
+                      ) : null}
                     </span>
                   </Td>
                   <Td>

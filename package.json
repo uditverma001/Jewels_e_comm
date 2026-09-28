@@ -2,6 +2,7 @@
   "name": "aurelia",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "type": "module",
   "engines": {
     "node": ">=20.11"
@@ -9,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -78,9 +80,14 @@
       "@tailwindcss/oxide",
       "@prisma/engines",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "postcss": ">=8.5.23",
+      "deepmerge-ts": ">=8.0.0"
+    }
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.7",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",

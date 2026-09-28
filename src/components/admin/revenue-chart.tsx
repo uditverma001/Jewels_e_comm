@@ -23,7 +23,11 @@ import { formatDate } from '@/lib/utils';
 
 const BAR_COLOR = '#a97421';
 const GRID_COLOR = '#e9e3d9';
-const AXIS_TEXT = '#867f78';
+// Axis labels are 10-11px, so they need the full 4.5:1 against the white panel
+// they sit on. This tracks `--color-stone-500`, which was darkened for exactly
+// that reason; it is a literal because SVG `fill` here is set per element
+// rather than inherited from a class.
+const AXIS_TEXT = '#726a63';
 
 const HEIGHT = 180;
 const MAX_BAR_WIDTH = 24;

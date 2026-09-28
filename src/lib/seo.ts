@@ -68,3 +68,25 @@ export function buildMetadata(params: {
 export function jsonLd(data: Record<string, unknown>): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');
 }
+
+/**
+ * Organization structured data.
+ *
+ * Emitted on the home page only. Google reads Organization markup from a
+ * site's root; repeating it inside the account area added nothing for search
+ * and put an inline <script> on the routes that carry the strict CSP.
+ */
+export const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: SITE.name,
+  url: SITE.url,
+  description: SITE.description,
+  logo: absoluteUrl('/icon.svg'),
+  address: {
+    '@type': 'PostalAddress',
+    addressCountry: 'IN',
+    addressLocality: 'Mumbai',
+    addressRegion: 'Maharashtra',
+  },
+} as const;

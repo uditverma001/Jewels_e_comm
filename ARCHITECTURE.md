@@ -318,9 +318,34 @@ Carts, sessions and reservations are hard-deleted or expired; keeping them would
 | Payment spoofing              | HMAC verification on callbacks _and_ webhooks, against the raw body; orders are only marked paid from a verified provider event.  |
 | Brute force / abuse           | Rate limits on login, registration, password reset, coupon application and checkout.                                              |
 | Secret exposure               | Zod-validated env; only `NEXT_PUBLIC_*` reaches the browser; `.env.example` holds no real values.                                 |
+| Secret blast radius           | `MAINTENANCE_TOKEN` is separate from `SESSION_SECRET` and boot fails if they match — the scheduler's copy leaks more easily.      |
+| Origin spoofing               | The CSRF allowlist comes from `APP_URL` + `ADDITIONAL_ORIGINS` only, never from the request's own `Host`/`X-Forwarded-Host`.      |
 
-Security headers (CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`) are set
-centrally in `next.config.ts` / middleware.
+Security headers are split by what can vary: the ones that are identical on every response
+(`HSTS`, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`) stay
+declarative in `next.config.ts`; the Content-Security-Policy is built per request in
+`src/middleware.ts` from `src/server/security/csp.ts`.
+
+### Why there are two Content-Security-Policies
+
+A nonce is the only thing that makes a CSP actually stop XSS — a policy containing
+`'unsafe-inline'` permits exactly what an injection needs. But Next.js can only stamp a nonce into
+its bootstrap scripts while rendering, so **any page issued a nonce renders per request** and loses
+its ISR cache.
+
+That cache is the difference between a fast catalogue and a slow one, and it is worth nothing on the
+pages that matter most for this threat. So:
+
+- **`/account`, `/admin`, `/checkout`, `/cart`, `/sign-in`, `/register`** — one customer's data and
+  all the privileged actions. These are already `force-dynamic`, so a nonce costs nothing. They get
+  `'nonce-…' 'strict-dynamic'` and **no** `'unsafe-inline'`.
+- **Everything else** — the ISR-cached catalogue. Keeps `'unsafe-inline'` for Next's bootstrap, and
+  still denies `eval`, plugins, framing and off-origin form posts.
+
+This is a trade, not a claim that the public pages are protected. What bounds the risk there is that
+they render admin-authored catalogue copy and React-escaped review text — no customer-supplied HTML
+reaches the DOM anywhere in the app. `'unsafe-eval'` is emitted in development only, for React
+Refresh; `e2e/security.spec.ts` asserts it never ships.
 
 ### Where the authorization boundary actually is
 
@@ -419,7 +444,176 @@ Two production-readiness gaps surfaced only by running the thing:
   own origin: a deployment answering on localhost is not a production
   deployment.
 
-## 11. Explicit assumptions
+## 11. Phase 2: what changed
+
+A second pass over the shipped application — security review, accessibility,
+motion, and one new feature. `SECURITY-REVIEW.md` is the full assessment.
+
+**Security.** Nine findings, all fixed with regression tests; each negative test
+was run against the original code to confirm it fails there. The substantive one
+was an authorization gate written as a list of rejections
+(`a && b && a !== b`), which collapses to `false` whenever either side is null
+— it let an anonymous caller past the ownership check on a customer's order.
+Production stopped those calls anyway, at the signature check below it, which is
+precisely why it needed fixing: a gate that works only because of what happens
+after it stops working the moment that other thing moves.
+
+**Accessibility.** `axe-core` now runs over eleven pages at WCAG 2.1 A and AA on
+both viewports, failing the build on any violation. It found that the muted text
+token was 3.47:1 sitewide — under the 4.5:1 floor on every page — and that two
+status colours were worse. Every token was re-derived by measurement against
+each background it actually composites over.
+
+**Motion.** Scroll-linked reveals built on `animation-timeline: view()` rather
+than an IntersectionObserver. A JS reveal has to start its content hidden, so a
+script failure or a strict CSP leaves the page blank; this is decoration on
+content that is already painted, and browsers without scroll-driven animations
+simply get a fade. `prefers-reduced-motion` detaches the timeline — collapsing
+`animation-duration`, which the global rule does, has no effect on an animation
+whose progress comes from scroll position rather than from time.
+
+**Back-in-stock alerts.** Deliberately one-shot: a request is consumed when the
+email goes out. No standing subscription means no unsubscribe token to mint, no
+unsubscribe route to secure, and no address retained after it has served its
+purpose. It is also the only place a visitor can make the server mail somebody
+else, so it is rate limited per browser _and_ per target address.
+
+**Mobile.** The `mobile` Playwright project existed but CI only ever ran
+`--project=chromium`, so it had never been green. Running it surfaced three
+failures, all fixture leakage across the two projects rather than product bugs —
+an address cap reached by accumulated test data, a wishlist left populated, a
+login budget spent twice over. CI now runs both projects.
+
+---
+
+## 12. Phase 3: the category's own conventions
+
+Research into how Indian jewellery is actually sold, turned into product.
+
+**Price breakup.** The defining feature of the category — Tanishq, CaratLane and
+Mia all publish metal weight × rate, making charges, stones and GST line by
+line, because a customer comparing two gold rings cannot compare sticker prices
+when most of the difference is weight they cannot see.
+
+The design decision that matters is what happens when the breakdown is wrong:
+`server/catalog/price-breakdown.ts` **drops it silently**. Components must sum
+to the ex-tax price to the paisa; anything else renders nothing and logs why. It
+is explicitly not a second pricing engine — it never decides what anything
+costs, and it takes the GST figure from `priceOrder` rather than recomputing it,
+because a second opinion about tax is exactly the bug a breakdown exists to rule
+out.
+
+Building it found a real one. The product page said **"Inclusive of GST"** while
+`priceOrder` adds GST on top, so the page showed one number and the checkout
+charged a larger one. `e2e/pricing.spec.ts` now reads the breakup off the
+product page and the totals off the checkout and asserts they agree.
+
+**Seed coherence.** The catalogue had three sets of numbers — price, metal
+weight, stone weight — invented independently, and they contradicted each other:
+a 10.8 g 22K signet ring priced at ₹89,000 is _below the melt value of its own
+gold_. Fifteen of twenty-six variants were in that state. Weights are now
+derived from the price at real market rates, stone weights come from the specs
+that state them, and making charges are the remainder — so the breakdown
+reconciles by construction. Two pieces priced below the cost of their own
+diamonds had their prices corrected.
+
+**Indian ring sizing.** The catalogue used 6–9, which are US numbers; in the
+Indian system those are child sizes. The help page already said "We use Indian
+ring sizes", so the data was contradicting the copy. Sizes are now 12–22, and
+`content/ring-sizes.ts` carries the chart with circumference derived from
+diameter so the two columns cannot drift.
+
+**Delivery estimates.** `server/delivery/estimate.ts` is pure and clock-injected,
+because a promised date is a promise: cut-off times, Sundays and IST are tested
+across a fortnight of order times for every zone. Deliberately not a table —
+zones change roughly never, and moving them into an admin screen would take a
+promise the shop is held to out of code review.
+
+**Assurances.** Four claims beside the buy button, each linking to the policy it
+comes from. Writing them caught two overstatements against the real policy —
+"30-day returns" where the policy says fifteen, and "IGI or GIA" where it says
+IGI — and an e2e test now asserts the claim and the policy still agree.
+
+**Gift options.** Jewellery is overwhelmingly bought as a gift, and the order
+note field was carrying the load — "please gift wrap it" buried in a paragraph
+the packing bench has to read and interpret. Now an explicit choice on the
+order snapshot (not the customer profile: what was asked for at the time is what
+gets packed, and a later profile edit must not change a parcel already on the
+bench), flagged in the admin list as well as on the order, and shown back to the
+customer so a wrong message is found before the parcel is.
+
+Wrapping is free, which is both authentic for the category and the reason it
+does not touch `priceOrder` — a charge would have to go through the pricing
+engine rather than be bolted on beside it.
+
+**Performance.** Measured on a throttled mid-range phone (4× CPU, slow 4G)
+rather than assumed. LCP is under 1s on every page and the shared bundle is
+103 kB, but the product page measured **CLS 0.186** — nearly twice the "poor"
+threshold — while every other page measured 0.000, so nothing in the aggregate
+pointed at it.
+
+The cause was the breadcrumb: it wrapped to two lines in the metric-adjusted
+fallback font and reflowed to one when the web font swapped in, moving
+everything below it 22px up. It now cannot wrap — one line, scrolling sideways
+on a phone, which is the better layout there anyway. CLS 0.186 → 0.000.
+
+`e2e/performance.spec.ts` guards this in two ways, because the obvious way
+does not work: reverting the fix and re-running the vitals budgets **did not
+reliably fail them**, since whether the shift happens depends on whether the
+font lands before or after first paint. The budgets are kept as a coarse guard
+and labelled as one; the actual guard asserts the structural property — the
+trail is `nowrap` and one line high at 320px — which fails deterministically on
+the old markup.
+
+**Engraving.** The catalogue already promised it — the signet's description
+says "Hand engraving is included", its specs list it, and the returns policy is
+written around it ("Engraved pieces cannot be returned... This is stated on the
+product page before you order"). There was no way to say what to cut, so the
+checkout note field was carrying it.
+
+The interesting part is not storing a string; it is what "the same item" means
+once a piece can be personalised. Two size-18 signets reading different
+initials are two lines; two reading the same are one line of quantity two. That
+cannot be expressed over a nullable column, because Postgres treats NULL as
+distinct from NULL — `@@unique([cartId, variantId, engravingText])` would
+silently permit two plain lines of the same variant. So `CartItem` carries an
+`engravingKey` that collapses absent to `''`, and a CHECK constraint keeps it in
+lockstep with the text so no call site can get it wrong.
+
+The non-returnable warning appears on the product page as the text is typed,
+not at checkout: that sentence is only fair where the decision is made.
+
+**Guest order tracking.** Every guest confirmation email linked to
+`/account/orders/…`, which is session-gated and scoped by user id — so the
+"View your order" button went to sign-in and then showed nothing, because the
+order has no account to belong to. `findGuestOrder` existed in
+`server/orders/service.ts` from the original build and had never been called
+by anything, which is the shape of a feature that was intended and forgotten.
+
+`/orders/track` is the door that link should always have opened. Both halves
+are in the `where` clause, never fetched-then-checked, and it refuses
+account-owned orders outright — those have a stronger door already, and an
+email address must not become a weaker second one. Failure returns the same
+message whether the order does not exist or the address does not match, so it
+cannot be used to discover which order numbers are real, and the rate limit is
+keyed on the order number as well as the browser, because the number is the
+thing being probed.
+
+Access is remembered in an httpOnly cookie holding order ids, so the page
+survives a reload; the ids are the permission and the database is always the
+content. An earlier draft listed the fifty newest guest orders and filtered
+them by that cookie, which would have hidden any older order entirely — a
+customer's order silently vanishing rather than a page that says nothing.
+
+**The confirmation email** now states the engraving, the gift wrap and its card
+message, and the dispatch window — 7–10 working days when something is being
+engraved, which is what the shipping policy already promised it would say. For
+a non-returnable personalisation the email is the customer's only durable
+record of what they asked for.
+
+---
+
+## 13. Explicit assumptions
 
 1. Single storefront, single currency (**INR**), shipping within India.
 2. **GST 3%** on jewellery — configurable per category, with an environment-level default.

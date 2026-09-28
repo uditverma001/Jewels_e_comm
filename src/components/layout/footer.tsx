@@ -28,6 +28,9 @@ function InstagramIcon({ className }: { className?: string }) {
 }
 
 const SUPPORT_LINKS = [
+  // First in the help column: "where is my order" is the commonest reason
+  // anyone reads a footer, and a guest has no account link to follow.
+  { href: '/orders/track', label: 'Track your order' },
   { href: '/help/shipping', label: 'Shipping & delivery' },
   { href: '/help/returns', label: 'Returns & exchanges' },
   { href: '/help/care', label: 'Jewellery care' },

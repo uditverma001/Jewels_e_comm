@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addSingleVariantToBag, SEED, signIn } from './helpers';
+import { addSingleVariantToBag, clearLoginRateLimit, clearWishlist, SEED, signIn } from './helpers';
 
 /**
  * Account, and the access control around it.
@@ -28,6 +28,7 @@ test('a customer cannot reach the admin area', async ({ page }) => {
 });
 
 test('the open-redirect parameter is not honoured', async ({ page }) => {
+  await clearLoginRateLimit(SEED.customerEmail);
   await page.goto('/sign-in?next=https://example.com/phish');
   await page.fill('#email', SEED.customerEmail);
   await page.fill('#password', SEED.customerPassword);
@@ -63,11 +64,14 @@ test('a customer can manage saved addresses', async ({ page }) => {
 });
 
 test('wishlist requires sign-in and then persists', async ({ page }) => {
+  await clearWishlist(SEED.customerEmail);
+
   // Anonymous: the heart sends the customer to sign in.
   await page.goto('/products/anaya-diamond-stud');
   await page.getByRole('button', { name: /save anaya diamond stud to wishlist/i }).click();
   await page.waitForURL(/\/sign-in/, { timeout: 20_000 });
 
+  await clearLoginRateLimit(SEED.customerEmail);
   await page.fill('#email', SEED.customerEmail);
   await page.fill('#password', SEED.customerPassword);
   await page.getByRole('button', { name: /^sign in$/i }).click();

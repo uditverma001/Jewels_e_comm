@@ -19,6 +19,7 @@ import { formatMinor } from '@/server/money';
 import { cn } from '@/lib/utils';
 import { AddressFields, EMPTY_ADDRESS, type AddressValues } from './address-fields';
 import { loadRazorpay, type RazorpaySuccess } from './razorpay-checkout';
+import { methodServes, restrictionFor } from '@/server/delivery/serviceability';
 
 export interface SavedAddress {
   id: string;
@@ -94,6 +95,8 @@ export function CheckoutForm({
   const [email, setEmail] = useState(defaultEmail);
   const [phone, setPhone] = useState(defaultPhone);
   const [customerNote, setCustomerNote] = useState('');
+  const [giftWrap, setGiftWrap] = useState(false);
+  const [giftMessage, setGiftMessage] = useState('');
 
   const defaultAddress = savedAddresses.find((address) => address.isDefault) ?? savedAddresses[0];
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
@@ -108,16 +111,59 @@ export function CheckoutForm({
 
   const usingSavedAddress = selectedAddressId !== null;
 
+  /**
+   * Where this order is going, as far as the form knows.
+   *
+   * Empty until a complete PIN code has been given, which is most of the time
+   * the customer spends choosing a delivery method.
+   */
+  const typedPincode = usingSavedAddress
+    ? (savedAddresses.find((saved) => saved.id === selectedAddressId)?.postalCode ?? '')
+    : address.postalCode.trim();
+  const destination = /^[1-9][0-9]{5}$/.test(typedPincode) ? typedPincode : null;
+
+  /**
+   * Methods that cannot be performed at that address.
+   *
+   * White glove is offered in three cities. Before this, it could be chosen
+   * from anywhere, and the order was accepted and charged. The server refuses
+   * it now, so leaving it selectable here would only move the refusal to the
+   * moment the customer presses pay.
+   */
+  const unavailable = destination
+    ? new Set(
+        shippingOptions
+          .filter((option) => !methodServes(option.code, destination).available)
+          .map((option) => option.code),
+      )
+    : new Set<string>();
+
+  // Move off a method that has just become unavailable, rather than leaving a
+  // disabled option selected and letting the customer walk into the refusal.
+  useEffect(() => {
+    if (!unavailable.has(shippingMethodCode)) return;
+    const fallback = shippingOptions.find((option) => !unavailable.has(option.code));
+    if (fallback) setShippingMethodCode(fallback.code);
+    // Keyed on the address, which is what changes availability.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destination]);
+
   // Re-quote from the server whenever the delivery choice changes. Computing
   // shipping here as well would be a second implementation of the pricing
   // rules, and the two would eventually disagree — with the customer seeing
   // one number and being charged another.
+  //
+  // The destination goes with it so the quote refuses an unserviceable method
+  // for the same reason the order would.
   useEffect(() => {
     if (!shippingMethodCode) return;
     let cancelled = false;
 
     void (async () => {
-      const result = await quoteCheckoutAction({ shippingMethodCode });
+      const result = await quoteCheckoutAction({
+        shippingMethodCode,
+        ...(destination ? { postalCode: destination } : {}),
+      });
       if (cancelled || !result.ok) return;
       setTotals(result.data);
     })();
@@ -125,7 +171,7 @@ export function CheckoutForm({
     return () => {
       cancelled = true;
     };
-  }, [shippingMethodCode]);
+  }, [shippingMethodCode, destination]);
 
   const displayTotals = totals;
 
@@ -135,6 +181,10 @@ export function CheckoutForm({
       phone,
       shippingMethodCode,
       customerNote,
+      giftWrap,
+      // Only sent when wrapping was asked for. A message on an unwrapped
+      // parcel has nothing to be written on.
+      giftMessage: giftWrap ? giftMessage : '',
       ...(usingSavedAddress
         ? { shippingAddressId: selectedAddressId, shippingAddress: toAddressInput(address) }
         : { shippingAddress: toAddressInput(address) }),
@@ -366,14 +416,21 @@ export function CheckoutForm({
                 const afterDiscount = totals.subtotalMinor - totals.discountMinor;
                 const free =
                   option.freeAboveMinor != null && afterDiscount >= option.freeAboveMinor;
+                const blocked = unavailable.has(option.code);
+                // Where it *is* offered, for a method the address rules out —
+                // and for one the customer has not given an address for yet.
+                const restriction = restrictionFor(option.code);
+
                 return (
                   <label
                     key={option.code}
                     className={cn(
-                      'flex cursor-pointer items-start gap-3 border p-4 transition-colors',
-                      shippingMethodCode === option.code
-                        ? 'border-ink-900'
-                        : 'border-ivory-300 hover:border-stone-400',
+                      'flex items-start gap-3 border p-4 transition-colors',
+                      blocked
+                        ? 'border-ivory-200 cursor-not-allowed opacity-55'
+                        : shippingMethodCode === option.code
+                          ? 'border-ink-900 cursor-pointer'
+                          : 'border-ivory-300 cursor-pointer hover:border-stone-400',
                     )}
                   >
                     <input
@@ -382,6 +439,7 @@ export function CheckoutForm({
                       value={option.code}
                       checked={shippingMethodCode === option.code}
                       onChange={() => setShippingMethodCode(option.code)}
+                      disabled={blocked}
                       className="accent-ink-900 mt-1 h-4 w-4"
                     />
                     <span className="flex-1 text-sm">
@@ -395,19 +453,77 @@ export function CheckoutForm({
                         {option.estimatedDaysMin}–{option.estimatedDaysMax} working days
                         {option.description ? ` · ${option.description}` : ''}
                       </span>
+                      {restriction ? (
+                        <span
+                          className={cn(
+                            'mt-1 block text-xs',
+                            blocked ? 'text-ink-800' : 'text-stone-500',
+                          )}
+                        >
+                          {blocked
+                            ? `Not available at this PIN code — ${restriction} only.`
+                            : `${restriction} only.`}
+                        </span>
+                      ) : null}
                     </span>
                   </label>
                 );
               })}
             </fieldset>
 
+            {/*
+             * Gift options are their own choice, not a line in a free-text
+             * note. The packing bench cannot reliably act on "please gift wrap
+             * it" buried in a paragraph, and a message written there never
+             * makes it onto a card.
+             */}
+            <fieldset className="border-ivory-300 border-t pt-6">
+              <legend className="sr-only">Gift options</legend>
+
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="checkout-gift-wrap"
+                  checked={giftWrap}
+                  onChange={(event) => setGiftWrap(event.target.checked)}
+                  className="accent-ink-900 mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>
+                  <span className="text-ink-900 block text-[0.9375rem]">This is a gift</span>
+                  <span className="mt-0.5 block text-sm text-stone-600">
+                    Wrapped in our box with a ribbon, and no prices anywhere in the parcel.
+                    Complimentary.
+                  </span>
+                </span>
+              </label>
+
+              {giftWrap ? (
+                <div className="mt-4">
+                  <Field label="Message on the card (optional)" htmlFor="checkout-gift-message">
+                    <Textarea
+                      id="checkout-gift-message"
+                      value={giftMessage}
+                      onChange={(event) => setGiftMessage(event.target.value)}
+                      rows={3}
+                      maxLength={200}
+                      placeholder="Written by hand on a card and tucked into the box"
+                    />
+                  </Field>
+                  <p className="mt-1.5 text-xs text-stone-500" aria-live="polite">
+                    {200 - giftMessage.length} characters left
+                  </p>
+                </div>
+              ) : null}
+            </fieldset>
+
             <Field label="Order note (optional)" htmlFor="checkout-note">
               <Textarea
+                id="checkout-note"
                 value={customerNote}
                 onChange={(event) => setCustomerNote(event.target.value)}
                 rows={3}
                 maxLength={500}
-                placeholder="Gift wrapping, engraving requests, delivery instructions"
+                placeholder="Engraving requests or delivery instructions"
               />
             </Field>
 

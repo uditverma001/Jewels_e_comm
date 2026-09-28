@@ -58,6 +58,7 @@ model User {
   reviews            Review[]
   couponRedemptions  CouponRedemption[]
   auditLogs          AuditLog[]
+  stockNotifications StockNotification[]
 
   @@index([role, status])
   @@index([createdAt])
@@ -103,7 +104,7 @@ model VerificationToken {
 }
 
 model Address {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   label      String?
   fullName   String
@@ -113,10 +114,10 @@ model Address {
   city       String
   state      String
   postalCode String
-  country    String   @default("IN")
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  country    String    @default("IN")
+  isDefault  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -131,20 +132,20 @@ model Address {
 /// Adjacency-list tree. Depth 1 = category ("Rings"), depth 2 = subcategory
 /// ("Engagement Rings"). Deeper nesting works without schema changes.
 model Category {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String?
-  imageUrl    String?
-  parentId    String?
-  position    Int      @default(0)
-  isActive    Boolean  @default(true)
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  imageUrl        String?
+  parentId        String?
+  position        Int      @default(0)
+  isActive        Boolean  @default(true)
   /// GST rate in basis points. Null inherits the parent, then the app default.
-  taxRateBps  Int?
+  taxRateBps      Int?
   metaTitle       String?
   metaDescription String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children Category[] @relation("CategoryTree")
@@ -156,18 +157,18 @@ model Category {
 }
 
 model Collection {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String?
-  heroImageUrl String?
-  isFeatured  Boolean  @default(false)
-  position    Int      @default(0)
-  isActive    Boolean  @default(true)
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  heroImageUrl    String?
+  isFeatured      Boolean  @default(false)
+  position        Int      @default(0)
+  isActive        Boolean  @default(true)
   metaTitle       String?
   metaDescription String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   products Product[]
   coupons  Coupon[]
@@ -208,7 +209,7 @@ model AttributeValue {
   slug        String
   position    Int    @default(0)
 
-  attribute Attribute              @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attribute Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
   products  ProductAttributeValue[]
 
   @@unique([attributeId, slug])
@@ -247,12 +248,19 @@ model Product {
   collectionId String?
 
   /// Default price for the product; a variant may override it.
-  basePriceMinor       Int
+  basePriceMinor      Int
   /// Original ("was") price used to render a discount. Must exceed basePriceMinor.
-  compareAtPriceMinor  Int?
+  compareAtPriceMinor Int?
 
   careInstructions String?
   tags             String[] @default([])
+
+  /// Maximum engraving length, or null when the piece cannot be engraved.
+  ///
+  /// A length rather than a boolean because the limit is physical — a signet
+  /// face takes more than a band shank — and a single flag would push that
+  /// number into the copy where nothing enforces it.
+  engravingMaxLength Int?
 
   isFeatured   Boolean @default(false)
   isBestSeller Boolean @default(false)
@@ -279,14 +287,14 @@ model Product {
   brand      Brand?      @relation(fields: [brandId], references: [id], onDelete: SetNull)
   collection Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
 
-  variants   ProductVariant[]
-  media      ProductMedia[]
-  options    ProductOption[]
-  attributes ProductAttributeValue[]
-  specs      ProductSpec[]
-  reviews    Review[]
+  variants      ProductVariant[]
+  media         ProductMedia[]
+  options       ProductOption[]
+  attributes    ProductAttributeValue[]
+  specs         ProductSpec[]
+  reviews       Review[]
   wishlistItems WishlistItem[]
-  orderItems OrderItem[]
+  orderItems    OrderItem[]
 
   @@index([status, publishedAt(sort: Desc)])
   @@index([categoryId, status])
@@ -345,7 +353,7 @@ model ProductOptionValue {
   value    String
   position Int    @default(0)
 
-  option   ProductOption       @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  option   ProductOption        @relation(fields: [optionId], references: [id], onDelete: Cascade)
   variants VariantOptionValue[]
 
   @@unique([optionId, value])
@@ -376,14 +384,16 @@ model ProductVariant {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  optionValues VariantOptionValue[]
-  inventory    Inventory?
-  media        ProductMedia[]
-  cartItems    CartItem[]
-  wishlistItems WishlistItem[]
-  orderItems   OrderItem[]
-  reservations InventoryReservation[]
+  product            Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionValues       VariantOptionValue[]
+  inventory          Inventory?
+  media              ProductMedia[]
+  cartItems          CartItem[]
+  wishlistItems      WishlistItem[]
+  orderItems         OrderItem[]
+  reservations       InventoryReservation[]
+  stockNotifications StockNotification[]
+  priceComponents    VariantPriceComponent[]
 
   @@index([productId, position])
   @@index([isActive, deletedAt])
@@ -484,14 +494,14 @@ enum CartStatus {
 /// once after a merge. The partial unique index in the migration guarantees a
 /// user has at most one ACTIVE cart.
 model Cart {
-  id           String     @id @default(cuid())
-  userId       String?
-  anonymousId  String?    @unique
-  status       CartStatus @default(ACTIVE)
-  couponCode   String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  expiresAt    DateTime
+  id          String     @id @default(cuid())
+  userId      String?
+  anonymousId String?    @unique
+  status      CartStatus @default(ACTIVE)
+  couponCode  String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  expiresAt   DateTime
 
   user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items CartItem[]
@@ -501,20 +511,34 @@ model Cart {
 }
 
 model CartItem {
-  id        String   @id @default(cuid())
-  cartId    String
-  variantId String
-  quantity  Int
+  id                  String   @id @default(cuid())
+  cartId              String
+  variantId           String
+  quantity            Int
   /// Unit price observed when the item was added. Used only to detect and
   /// surface price changes — the authoritative price is always read live.
   addedUnitPriceMinor Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  /// What to engrave, or null for a plain piece.
+  engravingText String?
+
+  /// `engravingText` normalised to '' when absent, solely so the unique index
+  /// below works.
+  ///
+  /// Postgres treats NULL as distinct from NULL in a unique index, so
+  /// `@@unique([cartId, variantId, engravingText])` would silently permit two
+  /// plain lines of the same variant — quantity 1 twice instead of quantity 2.
+  /// Collapsing null to an empty string is what makes "same variant, same
+  /// engraving" a single line while "same variant, different engraving"
+  /// remains two, which is the behaviour the bag needs.
+  engravingKey String @default("")
 
   cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
-  @@unique([cartId, variantId])
+  @@unique([cartId, variantId, engravingKey])
   @@index([variantId])
 }
 
@@ -540,6 +564,73 @@ model WishlistItem {
 
   @@unique([wishlistId, productId])
   @@index([productId])
+}
+
+/// What a piece is made of, priced line by line.
+///
+/// Indian jewellery is not sold at an opaque sticker price: the convention —
+/// and the customer's expectation — is metal weight times the day's rate, plus
+/// making charges, plus stones, with GST shown separately on top. A shop that
+/// will not show that arithmetic reads as one with something to hide.
+///
+/// These rows are display truth, not a second pricing engine. They MUST sum to
+/// the variant's own ex-tax price; `assertBreakdownReconciles` enforces it on
+/// the admin write path, and the product page renders nothing at all when they
+/// do not, because a breakdown that disagrees with the price being charged is
+/// worse than no breakdown.
+enum PriceComponentKind {
+  METAL
+  MAKING
+  STONE
+  HALLMARKING
+  OTHER
+}
+
+model VariantPriceComponent {
+  id          String             @id @default(cuid())
+  variantId   String
+  kind        PriceComponentKind
+  /// Human line, e.g. "22K gold". The quantitative detail below renders
+  /// alongside it rather than being baked into this string.
+  label       String
+  amountMinor Int
+  position    Int                @default(0)
+
+  /// Grams for metal, carats for stones. Null for a flat charge.
+  quantity         Decimal? @db.Decimal(10, 3)
+  /// "g" or "ct". Null when `quantity` is null.
+  unit             String?
+  /// Rate the quantity was priced at, so the arithmetic is checkable.
+  ratePerUnitMinor Int?
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId, position])
+}
+
+/// A customer asking to hear when one sold-out variant is available again.
+///
+/// Deliberately one-shot: the row is consumed when the email goes out, rather
+/// than kept as a standing subscription. That removes the need for unsubscribe
+/// tokens and an unsubscribe route — a person who asked once gets exactly one
+/// email and is then forgotten, which is both less code and less to leak.
+///
+/// Keyed by email rather than by account so a guest can use it. `userId` is
+/// recorded when there is one, for support rather than for authorization.
+model StockNotification {
+  id        String   @id @default(cuid())
+  variantId String
+  /// Citext: one request per address per variant, case-insensitively.
+  email     String   @db.Citext
+  userId    String?
+  createdAt DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  user    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([variantId, email])
+  @@index([variantId])
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------
@@ -587,12 +678,12 @@ model Coupon {
 /// One row per successful use. The unique (couponId, orderId) pair makes the
 /// redemption idempotent even if the webhook is replayed.
 model CouponRedemption {
-  id           String   @id @default(cuid())
-  couponId     String
-  orderId      String
-  userId       String?
-  amountMinor  Int
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  couponId    String
+  orderId     String
+  userId      String?
+  amountMinor Int
+  createdAt   DateTime @default(now())
 
   coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
   order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -607,19 +698,19 @@ model CouponRedemption {
 // ---------------------------------------------------------------------------
 
 model ShippingMethod {
-  id                String   @id @default(cuid())
-  code              String   @unique
-  name              String
-  description       String?
-  baseRateMinor     Int
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  description      String?
+  baseRateMinor    Int
   /// Order subtotal at or above which this method is free. Null = never free.
-  freeAboveMinor    Int?
-  estimatedDaysMin  Int
-  estimatedDaysMax  Int
-  position          Int      @default(0)
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  freeAboveMinor   Int?
+  estimatedDaysMin Int
+  estimatedDaysMax Int
+  position         Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([isActive, position])
 }
@@ -667,12 +758,12 @@ enum PaymentStatus {
 }
 
 model Order {
-  id          String        @id @default(cuid())
-  orderNumber String        @unique
-  userId      String?
-  email       String
-  phone       String
-  status      OrderStatus   @default(PENDING)
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  userId        String?
+  email         String
+  phone         String
+  status        OrderStatus   @default(PENDING)
   paymentStatus PaymentStatus @default(PENDING)
 
   currency String @default("INR")
@@ -694,11 +785,20 @@ model Order {
   cartId String?
 
   customerNote String?
-  adminNote    String?
 
-  placedAt    DateTime?
-  confirmedAt DateTime?
-  cancelledAt DateTime?
+  /// Complimentary gift packaging, chosen at checkout.
+  ///
+  /// Part of the immutable order snapshot rather than a customer preference:
+  /// what was asked for at the time is what the packing bench must do, and it
+  /// must not change if the customer edits anything later.
+  giftWrap    Boolean @default(false)
+  /// Handwritten onto a card. Null when none was left; never an empty string.
+  giftMessage String?
+  adminNote   String?
+
+  placedAt     DateTime?
+  confirmedAt  DateTime?
+  cancelledAt  DateTime?
   cancelReason String?
 
   createdAt DateTime @default(now())
@@ -740,10 +840,15 @@ model OrderItem {
   compareAtPriceMinor Int?
   quantity            Int
   lineSubtotalMinor   Int
-  lineDiscountMinor   Int @default(0)
-  taxRateBps          Int @default(0)
-  lineTaxMinor        Int @default(0)
+  lineDiscountMinor   Int  @default(0)
+  taxRateBps          Int  @default(0)
+  lineTaxMinor        Int  @default(0)
   lineTotalMinor      Int
+
+  /// Engraved onto this piece. Part of the snapshot: what was asked for is
+  /// what the bench cuts, and it cannot change afterwards — nor can the piece
+  /// be returned, which is why it is recorded rather than inferred.
+  engravingText String?
 
   reviewed Boolean @default(false)
 
@@ -814,8 +919,8 @@ model Payment {
   failureReason String?
 
   capturedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   refunds Refund[]
@@ -828,14 +933,14 @@ model Payment {
 /// Webhook de-duplication ledger. Insert-first, then process: a replay hits the
 /// unique constraint and is discarded.
 model PaymentEvent {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   provider        String
   providerEventId String
   type            String
   payload         Json
   processedAt     DateTime?
   error           String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@unique([provider, providerEventId])
   @@index([type, createdAt])
@@ -877,18 +982,18 @@ enum ReviewStatus {
 }
 
 model Review {
-  id          String       @id @default(cuid())
-  productId   String
-  userId      String
-  orderItemId String?
-  rating      Int
-  title       String?
-  body        String
-  status      ReviewStatus @default(PENDING)
-  isVerifiedPurchase Boolean @default(false)
-  moderatedAt DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 String       @id @default(cuid())
+  productId          String
+  userId             String
+  orderItemId        String?
+  rating             Int
+  title              String?
+  body               String
+  status             ReviewStatus @default(PENDING)
+  isVerifiedPurchase Boolean      @default(false)
+  moderatedAt        DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -904,25 +1009,25 @@ model Review {
 // ---------------------------------------------------------------------------
 
 model NewsletterSubscriber {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  source       String?
-  confirmedAt  DateTime?
+  id             String    @id @default(cuid())
+  email          String    @unique
+  source         String?
+  confirmedAt    DateTime?
   unsubscribedAt DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt      DateTime  @default(now())
 }
 
 /// Append-only trail for privileged actions (status changes, refunds, product
 /// edits, role changes). Queried rarely, written often — hence the narrow index.
 model AuditLog {
-  id           String   @id @default(cuid())
-  actorUserId  String?
-  action       String
-  entityType   String
-  entityId     String
-  metadata     Json?
-  ipAddress    String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
 
   actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 

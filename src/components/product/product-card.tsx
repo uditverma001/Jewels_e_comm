@@ -46,7 +46,10 @@ export function ProductCard({
                 sizes={sizes}
                 priority={priority}
                 className={cn(
-                  'object-cover transition-opacity duration-500 ease-[var(--ease-premium)]',
+                  // A slow, small zoom. Jewellery photography is detailed; a
+                  // little magnification on hover reads as looking closer,
+                  // whereas anything faster or larger reads as a banner ad.
+                  'object-cover transition-[opacity,transform] duration-700 ease-[var(--ease-premium)] group-hover:scale-[1.04] motion-reduce:transform-none motion-reduce:transition-none',
                   product.hoverImageUrl && 'group-hover:opacity-0',
                   soldOut && 'opacity-60',
                 )}
@@ -58,7 +61,7 @@ export function ProductCard({
                   fill
                   sizes={sizes}
                   loading="lazy"
-                  className="object-cover opacity-0 transition-opacity duration-500 ease-[var(--ease-premium)] group-hover:opacity-100"
+                  className="object-cover opacity-0 transition-[opacity,transform] duration-700 ease-[var(--ease-premium)] group-hover:scale-[1.04] group-hover:opacity-100 motion-reduce:transform-none motion-reduce:transition-none"
                 />
               ) : null}
             </>

@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { getFeaturedCollections, getNavigation, getProductRail } from '@/server/catalog/service';
 import { getAuthContext } from '@/server/auth/session';
 import { getWishlistProductIds } from '@/server/wishlist/service';
-import { buildMetadata, SITE } from '@/lib/seo';
+import { buildMetadata, jsonLd, organizationSchema, SITE } from '@/lib/seo';
 import { SectionHeader } from '@/components/layout/section-header';
 import { ProductRail } from '@/components/product/product-grid';
 import { ProductGridSkeleton } from '@/components/ui/skeleton';
@@ -163,6 +163,14 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Organization markup lives here rather than in the root layout: the
+          home page is the document search engines read it from, and keeping it
+          off the account and admin routes keeps those free of inline script. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(organizationSchema) }}
+      />
     </>
   );
 }

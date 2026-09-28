@@ -56,6 +56,13 @@ export function CartLine({ line, compact = false }: { line: CartLineView; compac
               </Link>
             </h3>
             <p className="mt-0.5 text-xs text-stone-500">{line.variantLabel}</p>
+            {/* Shown in the bag because it is the last chance to notice a typo
+                before the piece becomes non-returnable. */}
+            {line.engravingText ? (
+              <p className="text-ink-800 mt-1 text-xs">
+                Engraved: <span className="italic">{line.engravingText}</span>
+              </p>
+            ) : null}
             {line.priceChangedFromMinor != null ? (
               <p className="mt-1 text-xs text-[var(--color-warning)]">
                 Price updated since you added this

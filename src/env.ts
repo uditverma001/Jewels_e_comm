@@ -19,12 +19,51 @@ const serverSchema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
     APP_URL: z.string().url(),
+    /**
+     * The same URL again, for the browser.
+     *
+     * `APP_URL` is server-only, and the client bundle, the SEO metadata and the
+     * email footers all need the site's own address — so it has to travel as a
+     * `NEXT_PUBLIC_` variable too. Two transports for one fact, which is why the
+     * refinement below insists they agree.
+     *
+     * Required here because `publicEnv` falls back to `http://localhost:3000`
+     * when it is missing. That fallback feeds `metadataBase`, so every canonical
+     * URL, Open Graph tag and sitemap entry in a deployment that forgot to set
+     * it resolves against localhost — silently, and exactly where a search
+     * engine is the one reading.
+     */
+    NEXT_PUBLIC_APP_URL: z.string().url(),
+    /**
+     * Extra hostnames this deployment legitimately answers to, comma
+     * separated (e.g. "https://staging.example.com,https://www.example.com").
+     * Consulted by the CSRF origin check; leave empty for a single domain.
+     */
+    ADDITIONAL_ORIGINS: z.string().optional(),
     DATABASE_URL: z.string().url(),
 
     SESSION_SECRET: z
       .string()
       .min(32, 'SESSION_SECRET must be at least 32 characters of random data'),
     SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+
+    /**
+     * Bearer token for `/api/maintenance`.
+     *
+     * Separate from `SESSION_SECRET` on purpose. This value has to be pasted
+     * into a scheduler's configuration, which is a different — and usually
+     * more exposed — place than the application's own secret store: cron UIs,
+     * CI variables and job logs all tend to see it. Sharing one secret across
+     * those two blast radii means a leak from the scheduler also hands over
+     * the key used to sign payments in development.
+     *
+     * Optional so existing deployments keep booting; production requires it
+     * below.
+     */
+    MAINTENANCE_TOKEN: z
+      .string()
+      .min(32, 'MAINTENANCE_TOKEN must be at least 32 characters of random data')
+      .optional(),
 
     DEFAULT_TAX_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(300),
     CURRENCY: z.literal('INR').default('INR'),
@@ -64,6 +103,16 @@ const serverSchema = z
   // first person it inconvenienced. A deployment answering on localhost is not
   // a production deployment.
   .superRefine((cfg, ctx) => {
+    // Checked in every environment, not only production: the two disagreeing
+    // is a mistake anywhere, and finding it locally is the cheap way.
+    if (originOf(cfg.APP_URL) !== originOf(cfg.NEXT_PUBLIC_APP_URL)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEXT_PUBLIC_APP_URL'],
+        message: `NEXT_PUBLIC_APP_URL (${cfg.NEXT_PUBLIC_APP_URL}) must be the same origin as APP_URL (${cfg.APP_URL}) — they are one address, and links built from the wrong one go somewhere nobody is`,
+      });
+    }
+
     if (cfg.NODE_ENV !== 'production') return;
     if (isLocalOrigin(cfg.APP_URL)) return;
 
@@ -127,9 +176,36 @@ const serverSchema = z
         message: 'SESSION_SECRET still holds the development placeholder',
       });
     }
+    if (!cfg.MAINTENANCE_TOKEN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MAINTENANCE_TOKEN'],
+        message:
+          'MAINTENANCE_TOKEN is required in production — generate one with `openssl rand -base64 32`',
+      });
+    }
+    if (cfg.MAINTENANCE_TOKEN && cfg.MAINTENANCE_TOKEN === cfg.SESSION_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['MAINTENANCE_TOKEN'],
+        message:
+          'MAINTENANCE_TOKEN must not be the same value as SESSION_SECRET — the point is that a leak of one does not compromise the other',
+      });
+    }
   });
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
+
+/** Origin only, so a trailing slash or a path is not a disagreement. */
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin.toLowerCase();
+  } catch {
+    // `z.string().url()` has already rejected anything unparseable; returning
+    // the raw value keeps the comparison honest if that ever changes.
+    return url.toLowerCase();
+  }
+}
 
 function isLocalOrigin(appUrl: string): boolean {
   try {
@@ -168,7 +244,15 @@ export const env: ServerEnv = new Proxy({} as ServerEnv, {
   },
 });
 
-/** Safe to import anywhere, including client components. */
+/**
+ * Safe to import anywhere, including client components.
+ *
+ * The fallbacks are a last resort rather than the guarantee. `NEXT_PUBLIC_APP_URL`
+ * is required by the server schema and checked against `APP_URL`, so a
+ * deployment missing it does not boot and a build without it does not finish —
+ * which is the point, because the fallback silently pointed every canonical URL
+ * and email footer at localhost.
+ */
 export const publicEnv = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
   storeName: process.env.NEXT_PUBLIC_STORE_NAME ?? 'Aurelia',

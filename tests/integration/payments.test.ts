@@ -262,7 +262,7 @@ describe('browser callback', () => {
         providerPaymentId: payment.providerPaymentId,
         signature,
       },
-      user.id,
+      { userId: user.id, hasCheckoutClaim: false },
     );
 
     expect(result.status).toBe('paid');
@@ -282,7 +282,7 @@ describe('browser callback', () => {
           providerPaymentId: payment.providerPaymentId,
           signature: 'f'.repeat(64),
         },
-        user.id,
+        { userId: user.id, hasCheckoutClaim: false },
       ),
     ).rejects.toMatchObject({ code: 'PAYMENT_FAILED' });
 
@@ -307,7 +307,7 @@ describe('browser callback', () => {
         providerPaymentId: payment.providerPaymentId,
         signature,
       },
-      user.id,
+      { userId: user.id, hasCheckoutClaim: false },
     );
 
     expect(result.status).toBe('failed');
@@ -328,8 +328,87 @@ describe('browser callback', () => {
           providerPaymentId: payment.providerPaymentId,
           signature,
         },
-        attacker.id,
+        { userId: attacker.id, hasCheckoutClaim: false },
       ),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+/**
+ * Regression cover for the authorization holes the deny-by-default rewrite of
+ * `callerOwnsOrder` closed.
+ *
+ * Both of these were previously ALLOWED past the ownership gate, because the
+ * old condition — `order.userId && actorUserId && order.userId !== actorUserId`
+ * — collapses to false whenever either side is null. In production each was
+ * still stopped a few lines later by the signature check and the
+ * order↔providerOrderId payment-row binding, so neither was exploitable as
+ * shipped. They are tested here because that is luck, not design: the gate is
+ * supposed to stop them on its own, and a later refactor of the binding would
+ * otherwise turn a latent hole into a live one silently.
+ */
+describe('checkout callback ownership', () => {
+  it('refuses an anonymous caller with no claim against a customer’s order', async () => {
+    const { order, providerOrderId } = await placeOrder();
+    const { payment, signature } = provider.simulatePayment(providerOrderId);
+
+    await expect(
+      verifyCheckoutCallback(
+        {
+          orderId: order.id,
+          providerOrderId,
+          providerPaymentId: payment.providerPaymentId,
+          signature,
+        },
+        { userId: null, hasCheckoutClaim: false },
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const updated = await testDb.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(updated.paymentStatus).toBe('PENDING');
+  });
+
+  it('refuses a signed-in stranger against a guest order', async () => {
+    const { order, providerOrderId } = await placeOrder();
+    // Detach the order from its customer: this is now a guest order, owned
+    // only by the browser holding the checkout claim.
+    await testDb.order.update({ where: { id: order.id }, data: { userId: null } });
+
+    const stranger = await createUser();
+    const { payment, signature } = provider.simulatePayment(providerOrderId);
+
+    await expect(
+      verifyCheckoutCallback(
+        {
+          orderId: order.id,
+          providerOrderId,
+          providerPaymentId: payment.providerPaymentId,
+          signature,
+        },
+        { userId: stranger.id, hasCheckoutClaim: false },
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const updated = await testDb.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(updated.paymentStatus).toBe('PENDING');
+  });
+
+  it('accepts the guest browser that holds the checkout claim', async () => {
+    const { order, providerOrderId } = await placeOrder();
+    await testDb.order.update({ where: { id: order.id }, data: { userId: null } });
+
+    const { payment, signature } = provider.simulatePayment(providerOrderId);
+
+    const result = await verifyCheckoutCallback(
+      {
+        orderId: order.id,
+        providerOrderId,
+        providerPaymentId: payment.providerPaymentId,
+        signature,
+      },
+      { userId: null, hasCheckoutClaim: true },
+    );
+
+    expect(result.status).toBe('paid');
   });
 });
