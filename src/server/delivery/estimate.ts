@@ -119,6 +119,19 @@ const PINCODE_PATTERN = /^[1-8]\d{5}$/;
  */
 export interface PieceOptions {
   madeToOrder?: boolean;
+  /**
+   * The delivery service this quote is for, as the shipping method defines it.
+   *
+   * Needed because the zone table on its own promised a speed no service sold
+   * here can deliver. Mumbai is one to two days from the workshop by geography,
+   * and the product page quoted exactly that — while the only options at
+   * checkout were standard at four to seven working days and express at two to
+   * three. The faster number was not a different service, it was nobody's.
+   *
+   * Passed in rather than read here, because the ranges live on
+   * `ShippingMethod` in the database and this module stays free of it.
+   */
+  service?: { minDays: number; maxDays: number };
 }
 
 export function estimateDelivery(
@@ -170,6 +183,19 @@ export function estimateDelivery(
   const readyOn = nextDispatchDay(now);
   const madeToOrder = piece.madeToOrder === true;
 
+  /*
+   * Distance and service level both bound the transit, so the quote is the
+   * slower of the two on each end.
+   *
+   * Never the faster one: being near the workshop does not buy a customer a
+   * service they have not paid for, and a date nothing on the shelf can meet is
+   * an over-promise on the page they plan around. Where the zone is the slower
+   * of the two — the north-east against standard delivery — the quote runs past
+   * the policy's general figure, which is the safe direction to differ in.
+   */
+  const transitMin = Math.max(zone.minDays, piece.service?.minDays ?? 0);
+  const transitMax = Math.max(zone.maxDays, piece.service?.maxDays ?? 0);
+
   // Bench time lands before dispatch, so it shifts both ends of the dispatch
   // window and everything downstream of it.
   const dispatchOn = madeToOrder ? addBusinessDays(readyOn, MADE_TO_ORDER_DAYS_MIN) : readyOn;
@@ -179,16 +205,16 @@ export function estimateDelivery(
     serviceable: true,
     pincode,
     zone: zone.name,
-    minDays: zone.minDays,
-    maxDays: zone.maxDays,
+    minDays: transitMin,
+    maxDays: transitMax,
     dispatchOn,
     dispatchBy,
     madeToOrder,
-    earliest: addBusinessDays(dispatchOn, zone.minDays),
+    earliest: addBusinessDays(dispatchOn, transitMin),
     // The slowest bench time followed by the slowest transit. Compounding the
     // two is the honest outer bound; taking the worst of them separately would
     // quote a date we could miss without anything going wrong.
-    latest: addBusinessDays(dispatchBy, zone.maxDays),
+    latest: addBusinessDays(dispatchBy, transitMax),
   };
 }
 

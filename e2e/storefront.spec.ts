@@ -229,6 +229,11 @@ test('the delivery check answers with a dated window, or says why it cannot', as
   await expect(page.getByText(/mumbai/i).first()).toBeVisible();
   await expect(page.getByText(/insured and signature-on-delivery/i)).toBeVisible();
 
+  // And it says which service the date belongs to. Without that it once quoted
+  // Mumbai at one to two days from the workshop, which was neither of the two
+  // services on sale — standard is four to seven and express is two to three.
+  await expect(page.getByText(/with standard delivery/i)).toBeVisible();
+
   // An army post code gets an explanation, not a flat refusal, because the
   // customer has a civilian address we could have shipped to.
   await page.fill('#delivery-pincode', '900001');

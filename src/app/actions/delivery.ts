@@ -5,6 +5,7 @@ import { assertSameOrigin } from '@/server/auth/csrf';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { estimateDelivery, type DeliveryResult } from '@/server/delivery/estimate';
 import { parseInput, success, toActionResult, type ActionResult } from '@/server/action-result';
+import { db } from '@/lib/db';
 
 /**
  * "When will it reach me?"
@@ -29,14 +30,47 @@ const schema = z.object({
   madeToOrder: z.boolean().optional(),
 });
 
-export async function checkDeliveryAction(input: unknown): Promise<ActionResult<DeliveryResult>> {
+export async function checkDeliveryAction(
+  input: unknown,
+): Promise<ActionResult<DeliveryResult & { serviceName?: string }>> {
   try {
     await assertSameOrigin();
     await enforceRateLimit('deliveryCheck');
     const data = parseInput(schema, input);
 
-    return success(estimateDelivery(data.pincode, new Date(), { madeToOrder: data.madeToOrder }));
+    // The service the customer gets unless they pay to upgrade. Quoted by name
+    // on the page, because a date with no service attached is unanswerable when
+    // two services exist — and because the zone table alone was promising a
+    // speed neither of them sells.
+    const service = await defaultShippingService();
+
+    const estimate = estimateDelivery(data.pincode, new Date(), {
+      madeToOrder: data.madeToOrder,
+      service: service
+        ? { minDays: service.estimatedDaysMin, maxDays: service.estimatedDaysMax }
+        : undefined,
+    });
+
+    return success(
+      estimate.serviceable && service ? { ...estimate, serviceName: service.name } : estimate,
+    );
   } catch (error) {
     return toActionResult(error);
   }
+}
+
+/**
+ * The cheapest active method, which is what an order gets by default.
+ *
+ * Read from the database rather than named here, so the quote cannot drift from
+ * what checkout will actually offer. Null if there is none, in which case the
+ * estimate falls back to distance alone — the old behaviour, and the best that
+ * can be said when no service is configured.
+ */
+async function defaultShippingService() {
+  return db.shippingMethod.findFirst({
+    where: { isActive: true },
+    orderBy: [{ position: 'asc' }],
+    select: { name: true, estimatedDaysMin: true, estimatedDaysMax: true },
+  });
 }

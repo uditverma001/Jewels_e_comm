@@ -24,7 +24,7 @@ import type { DeliveryResult } from '@/server/delivery/estimate';
  */
 export function DeliveryCheck({ madeToOrder = false }: { madeToOrder?: boolean }) {
   const [pincode, setPincode] = useState('');
-  const [result, setResult] = useState<DeliveryResult | null>(null);
+  const [result, setResult] = useState<(DeliveryResult & { serviceName?: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -149,6 +149,11 @@ export function DeliveryCheck({ madeToOrder = false }: { madeToOrder?: boolean }
             <div>
               <p className="text-ink-800">
                 Arrives <strong className="font-medium">{formatWindow(result)}</strong>
+                {result.serviceName ? (
+                  // Named, because a date means nothing when two services exist
+                  // and they take different lengths of time.
+                  <span className="text-stone-600"> with {result.serviceName.toLowerCase()}</span>
+                ) : null}
               </p>
               <p className="mt-0.5 text-xs text-stone-500">
                 {result.zone} · {formatDispatch(result)} · insured and signature-on-delivery

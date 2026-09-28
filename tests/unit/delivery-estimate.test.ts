@@ -205,3 +205,64 @@ describe('made-to-order bench time', () => {
     expect(omitted).toEqual(explicit);
   });
 });
+
+describe('the quote never beats the service that carries it', () => {
+  /**
+   * The bug: the zone table said Mumbai was one to two days from the workshop
+   * and the product page quoted exactly that, while the only options at
+   * checkout were standard at four to seven working days and express at two to
+   * three. One to two days was not a cheaper service or a faster one — it was
+   * nobody's, and it was the number the customer planned around.
+   */
+  const STANDARD = { minDays: 4, maxDays: 7 };
+  const EXPRESS = { minDays: 2, maxDays: 3 };
+
+  function transit(pincode: string, service?: { minDays: number; maxDays: number }) {
+    const result = estimateDelivery(pincode, WED_MORNING, service ? { service } : {});
+    if (!result.serviceable) throw new Error('expected a serviceable estimate');
+    return { min: result.minDays, max: result.maxDays };
+  }
+
+  it('does not promise a nearby customer more than standard delivery provides', () => {
+    // Mumbai: 1–2 by distance, but standard is what they are buying.
+    expect(transit('400001', STANDARD)).toEqual({ min: 4, max: 7 });
+  });
+
+  it('gives express its own, faster window', () => {
+    expect(transit('400001', EXPRESS)).toEqual({ min: 2, max: 3 });
+  });
+
+  it('keeps the slower distance where geography is the binding constraint', () => {
+    // The north-east is 5–8 days away, which is slower than standard's general
+    // figure. Quoting 4–7 there would be the over-promise in the other
+    // direction, so distance wins.
+    expect(transit('781001', STANDARD)).toEqual({ min: 5, max: 8 });
+  });
+
+  it('is never faster than the service on any PIN code in the table', () => {
+    // The property, rather than three examples of it.
+    const pincodes = [
+      '400001',
+      '110001',
+      '560001',
+      '700001',
+      '600001',
+      '781001',
+      '110092',
+      '380001',
+    ];
+    for (const pincode of pincodes) {
+      for (const service of [STANDARD, EXPRESS]) {
+        const { min, max } = transit(pincode, service);
+        expect(min, `${pincode} min beats the service`).toBeGreaterThanOrEqual(service.minDays);
+        expect(max, `${pincode} max beats the service`).toBeGreaterThanOrEqual(service.maxDays);
+      }
+    }
+  });
+
+  it('falls back to distance alone when no service is configured', () => {
+    // Not a promise anybody can hold us to, but it is the most that can be said
+    // when the shop has no delivery method set up.
+    expect(transit('400001')).toEqual({ min: 1, max: 2 });
+  });
+});
