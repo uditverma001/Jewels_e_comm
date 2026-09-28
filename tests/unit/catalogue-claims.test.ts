@@ -133,3 +133,84 @@ describe('the copy and the data agree', () => {
     }
   });
 });
+
+describe('authenticity policy: "any diamond above 0.30ct ships with an IGI certificate"', () => {
+  /**
+   * The threshold is per stone, not per piece.
+   *
+   * This is the distinction the policy turns on: "smaller accent stones are not
+   * individually certified — no laboratory certifies melee." A tennis bracelet
+   * carrying 3.20ct across 52 brilliants is 0.06ct a stone and needs no
+   * certificate; a 0.70ct solitaire does. A check that read total weight would
+   * demand certificates for melee and call the catalogue broken when it is
+   * correct — which is exactly the mistake this test was written after making.
+   */
+  const CERTIFIED_ABOVE_CT = 0.3;
+
+  /** The largest single diamond in a piece, as far as its specs state one. */
+  function largestStoneCt(specs: readonly { label: string; value: string }[]): number {
+    let largest = 0;
+
+    for (const spec of specs) {
+      const total = spec.value.match(/([\d.]+)\s*ct\b/i);
+      if (!total) continue;
+      const totalCt = Number(total[1]);
+
+      // "0.50ct (0.25ct each)" states the per-stone weight outright.
+      const each = spec.value.match(/([\d.]+)\s*ct\s*each/i);
+      if (each) {
+        largest = Math.max(largest, Number(each[1]));
+        continue;
+      }
+
+      // "0.18ct, 22 stones" or "52 brilliants" divides across the count.
+      const count =
+        spec.value.match(/(\d+)\s*(?:stones|brilliants)/i) ??
+        specs
+          .find((other) => /(\d+)\s*(?:stones|brilliants)/i.test(other.value))
+          ?.value.match(/(\d+)\s*(?:stones|brilliants)/i);
+      if (count) {
+        largest = Math.max(largest, totalCt / Number(count[1]));
+        continue;
+      }
+
+      // Nothing says otherwise, so it is one stone of that weight.
+      largest = Math.max(largest, totalCt);
+    }
+
+    return largest;
+  }
+
+  it('certifies every diamond big enough to be certifiable, and no melee', () => {
+    for (const product of PRODUCTS) {
+      if (product.attributes['stone-type'] !== 'Diamond') continue;
+
+      const stone = largestStoneCt(product.specs);
+      const certified =
+        /\bIGI\b/i.test(product.description) ||
+        product.specs.some((spec) => /\bIGI\b/i.test(spec.value));
+
+      if (stone > CERTIFIED_ABOVE_CT) {
+        expect(
+          certified,
+          `${product.name} has a ${stone.toFixed(2)}ct diamond and states no IGI certificate`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('reads per-stone weight rather than the total', () => {
+    // Guards the parser itself: if this regressed to reading totals, the test
+    // above would start demanding certificates for melee and the catalogue
+    // would be "fixed" by adding claims that are not true.
+    expect(
+      largestStoneCt([
+        { label: 'Total carat', value: '3.20ct' },
+        { label: 'Stone count', value: '52 brilliants' },
+      ]),
+    ).toBeCloseTo(3.2 / 52, 4);
+
+    expect(largestStoneCt([{ label: 'Total carat', value: '0.50ct (0.25ct each)' }])).toBe(0.25);
+    expect(largestStoneCt([{ label: 'Centre stone', value: '0.70ct brilliant cut' }])).toBe(0.7);
+  });
+});
