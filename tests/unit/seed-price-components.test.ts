@@ -118,3 +118,71 @@ describe('buildSeedComponents', () => {
     );
   });
 });
+
+describe('the gold rates agree with each other', () => {
+  /**
+   * Every product page shows its own arithmetic: "4.2 g × ₹9,280/g". Two pages
+   * are therefore two public claims about the price of gold, and a customer can
+   * put them side by side — 18K is 75% fine and 22K is 91.6%, so the rates have
+   * to be in that ratio or one of the pages is wrong.
+   *
+   * Nothing enforced that. Updating the rate table when gold moves is exactly
+   * the routine edit where one purity gets missed, and the result is not a
+   * crash or a failing reconcile — it is a catalogue that quotes two different
+   * gold rates on the same day, which is checkable by anybody who cares to.
+   */
+  const FINENESS: Record<string, number> = {
+    '24K': 0.999,
+    '22K': 0.916,
+    '18K': 0.75,
+    '14K': 0.583,
+  };
+
+  /** The rate the generator actually quotes for a gram of this purity. */
+  function metalRateFor(purity: string): number {
+    const { components } = buildSeedComponents({
+      exTaxPriceMinor: 10_000_000,
+      purity,
+      metalType: 'Yellow Gold',
+      stoneType: null,
+      stoneCarats: null,
+    });
+
+    const metal = components.find((component) => component.kind === 'METAL');
+    if (!metal?.ratePerUnitMinor) throw new Error(`no metal rate for ${purity}`);
+    return metal.ratePerUnitMinor;
+  }
+
+  it('implies one price for pure gold, whatever the purity sold', () => {
+    const implied = Object.entries(FINENESS).map(([purity, fineness]) => ({
+      purity,
+      perGramOfFineGold: metalRateFor(purity) / fineness,
+    }));
+
+    const lowest = Math.min(...implied.map((entry) => entry.perGramOfFineGold));
+    const highest = Math.max(...implied.map((entry) => entry.perGramOfFineGold));
+
+    // One per cent covers rounding to whole rupees at every purity; it does not
+    // cover a rate that was typed in without reference to the others.
+    const spread = (highest - lowest) / lowest;
+    expect(
+      spread,
+      `purities imply pure gold at ${implied
+        .map((entry) => `${entry.purity}: ₹${Math.round(entry.perGramOfFineGold / 100)}/g`)
+        .join(', ')}`,
+    ).toBeLessThan(0.01);
+  });
+
+  it('prices a purer gold above a less pure one', () => {
+    // The coarse version of the same rule, which holds even if somebody
+    // deliberately widens the tolerance above.
+    const order = ['14K', '18K', '22K', '24K'];
+    for (let i = 1; i < order.length; i += 1) {
+      const lower = metalRateFor(order[i - 1]!);
+      const higher = metalRateFor(order[i]!);
+      expect(higher, `${order[i]} should cost more per gram than ${order[i - 1]}`).toBeGreaterThan(
+        lower,
+      );
+    }
+  });
+});
