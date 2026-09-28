@@ -152,3 +152,51 @@ test('the published return policy in structured data matches the policy page', a
   await page.goto('/help/returns');
   await expect(page.getByText(/fifteen days/i).first()).toBeVisible();
 });
+
+test('the rupee sign is set in the same typeface as the digits beside it', async ({ page }) => {
+  /**
+   * Neither family's latin subset contains U+20B9, so before the glyph patch
+   * the digits rendered in Inter and the ₹ next to them in DejaVu Sans — on
+   * every price on the site, which for a jewellery shop is the most-read number
+   * on the page.
+   *
+   * Asserted through `CSS.getPlatformFontsForNode`, which reports the font the
+   * browser actually reached for, because `document.fonts.check` answers a
+   * different question: it counts system fallbacks as success and returned true
+   * throughout.
+   */
+  await page.goto('/products/aurora-solitaire-ring');
+  await page.waitForLoadState('networkidle');
+
+  await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.id = 'font-probe';
+    probe.innerHTML =
+      '<span id="probe-sans-rupee">₹</span><span id="probe-sans-digit">9</span>' +
+      '<span id="probe-display-rupee" style="font-family: var(--font-display)">₹</span>' +
+      '<span id="probe-display-digit" style="font-family: var(--font-display)">9</span>';
+    probe.style.cssText = 'font-family: var(--font-sans); font-size: 32px';
+    document.body.appendChild(probe);
+  });
+
+  const client = await page.context().newCDPSession(page);
+  await client.send('DOM.enable');
+  await client.send('CSS.enable');
+  const { root } = await client.send('DOM.getDocument');
+
+  async function renderedWith(selector: string): Promise<string> {
+    const { nodeId } = await client.send('DOM.querySelector', { nodeId: root.nodeId, selector });
+    const { fonts } = await client.send('CSS.getPlatformFontsForNode', { nodeId });
+    return fonts.map((font) => font.familyName).join(',');
+  }
+
+  const sansRupee = await renderedWith('#probe-sans-rupee');
+  const sansDigit = await renderedWith('#probe-sans-digit');
+  expect(sansDigit, 'a digit should render in the body face').toMatch(/inter/i);
+  expect(sansRupee, 'the rupee should render in the same face as the digits').toBe(sansDigit);
+
+  const displayRupee = await renderedWith('#probe-display-rupee');
+  const displayDigit = await renderedWith('#probe-display-digit');
+  expect(displayDigit, 'a digit should render in the display face').toMatch(/cormorant/i);
+  expect(displayRupee, 'the rupee should match the display face too').toBe(displayDigit);
+});

@@ -5,10 +5,17 @@ what `next/font/google` was downloading at build time before they were committed
 here. They are kept in the repository so that `next build` does not depend on
 fonts.googleapis.com answering — see the comment in `../layout.tsx`.
 
-| File                             | Family             | Axis         | Version |
-| -------------------------------- | ------------------ | ------------ | ------- |
-| `cormorant-garamond-latin.woff2` | Cormorant Garamond | wght 300–700 | v21     |
-| `inter-latin.woff2`              | Inter              | wght 100–900 | v20     |
+| File                             | Family             | Axis         | Version | Contents     |
+| -------------------------------- | ------------------ | ------------ | ------- | ------------ |
+| `cormorant-garamond-latin.woff2` | Cormorant Garamond | wght 300–700 | v21     | latin subset |
+| `inter-latin.woff2`              | Inter              | wght 100–900 | v20     | latin subset |
+| `cormorant-garamond-rupee.woff2` | Cormorant Garamond | wght 300–700 | v21     | U+20B9 only  |
+| `inter-rupee.woff2`              | Inter              | wght 100–900 | v20     | U+20B9 only  |
+
+The two `-rupee` files exist because neither family's latin subset contains the
+rupee sign, so every price on the site was set in two typefaces — digits in
+Inter, ₹ in whatever the system offered. They hold one glyph each and lead the
+font stacks, supplying ₹ and falling through for everything else.
 
 Both are licensed under the **SIL Open Font License, Version 1.1**, which
 permits redistribution, including bundled in a repository and served from our own
@@ -37,6 +44,19 @@ python3 -c "from fontTools.ttLib import TTFont; f=TTFont('inter-latin.woff2'); \
 print([(a.axisTag,a.minValue,a.maxValue) for a in f['fvar'].axes])"
 ```
 
-Note that neither family's latin subset contains the rupee sign (U+20B9), so it
-renders from the fallback stack. That was equally true of the Google-hosted
-subsets and is not a consequence of self-hosting.
+A glyph the latin subset lacks needs its own file, the way ₹ did. Google will
+subset to an exact string, which is how those two were made:
+
+```
+curl -A "Mozilla/5.0" --get \
+  --data-urlencode "family=Inter:wght@100..900" \
+  --data-urlencode "text=₹" \
+  "https://fonts.googleapis.com/css2"
+```
+
+Check what came back actually contains it, rather than trusting the request:
+
+```
+python3 -c "from fontTools.ttLib import TTFont; \
+print(0x20B9 in TTFont('inter-rupee.woff2').getBestCmap())"
+```

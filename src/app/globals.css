@@ -64,8 +64,10 @@
   --color-danger: oklch(0.51 0.185 27);
   --color-warning: oklch(0.5 0.14 78);
 
-  --font-display: var(--font-cormorant), Georgia, 'Times New Roman', serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* The rupee patch leads each stack; see the note in layout.tsx. */
+  --font-display:
+    var(--font-cormorant-rupee), var(--font-cormorant), Georgia, 'Times New Roman', serif;
+  --font-sans: var(--font-inter-rupee), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   --radius-card: 2px;
 
