@@ -11,6 +11,7 @@ import { generateOrderNumber } from '@/server/orders/order-number';
 import type { CartOwner } from '@/server/cart/service';
 import { getPaymentProvider } from '@/server/integrations/payments';
 import type { AddressInput, CheckoutInput } from './schema';
+import { methodServes } from '@/server/delivery/serviceability';
 
 /**
  * Checkout.
@@ -112,9 +113,27 @@ function availabilityOf(item: CheckoutItem): number {
   return Math.max(0, inventory.quantity - inventory.reserved);
 }
 
-async function loadShippingMethod(code: string): Promise<ShippingQuote> {
+/**
+ * The chosen delivery method, validated against where it is going.
+ *
+ * The destination is a parameter rather than an afterthought because the method
+ * code arrives from the browser. This checked only `isActive`, so white glove —
+ * which the policy offers in three cities — was selectable from anywhere in
+ * India, and the customer was charged ₹1,500 for an appointment nobody could
+ * keep.
+ *
+ * `postalCode` is null only where no address has been given yet, which is the
+ * checkout page before the form is filled in. Order creation always has one.
+ */
+async function loadShippingMethod(code: string, postalCode: string | null): Promise<ShippingQuote> {
   const method = await db.shippingMethod.findFirst({ where: { code, isActive: true } });
   if (!method) throw validationError('Choose a delivery method.');
+
+  if (postalCode) {
+    const availability = methodServes(method.code, postalCode);
+    if (!availability.available) throw validationError(availability.reason);
+  }
+
   return {
     code: method.code,
     name: method.name,
@@ -214,9 +233,12 @@ function assertPurchasable(cart: CartForCheckout): void {
 export async function getCheckoutSummary(
   owner: CartOwner,
   shippingMethodCode?: string | null,
+  postalCode?: string | null,
 ): Promise<CheckoutSummary> {
   const cart = await loadCartForCheckout(owner);
-  const shipping = shippingMethodCode ? await loadShippingMethod(shippingMethodCode) : null;
+  const shipping = shippingMethodCode
+    ? await loadShippingMethod(shippingMethodCode, postalCode ?? null)
+    : null;
 
   const subtotalMinor = cart.items.reduce(
     (sum, item) => sum + unitPriceOf(item) * item.quantity,
@@ -278,7 +300,12 @@ export async function createOrder(owner: CartOwner, input: CheckoutInput): Promi
   const cart = await loadCartForCheckout(owner);
   assertPurchasable(cart);
 
-  const shipping = await loadShippingMethod(input.shippingMethodCode);
+  // The address this order is actually going to, not one the client asserted
+  // separately: a method the policy does not offer there is refused here.
+  const shipping = await loadShippingMethod(
+    input.shippingMethodCode,
+    input.shippingAddress.postalCode,
+  );
 
   const subtotalMinor = cart.items.reduce(
     (sum, item) => sum + unitPriceOf(item) * item.quantity,

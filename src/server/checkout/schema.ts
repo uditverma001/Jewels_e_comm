@@ -123,4 +123,14 @@ export const abandonCheckoutSchema = z.object({
 
 export const quoteCheckoutSchema = z.object({
   shippingMethodCode: z.string().trim().min(1).max(40),
+  /**
+   * Where it is going, when the form has got that far.
+   *
+   * Optional because the customer picks a delivery method before finishing the
+   * address, and a quote should not refuse to render for want of a PIN code.
+   * Supplying it lets the quote refuse a method that cannot be performed there
+   * while the customer is still on the form, rather than at the moment they
+   * press pay.
+   */
+  postalCode: postalCodeSchema.optional(),
 });

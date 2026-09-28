@@ -45,7 +45,7 @@ export async function quoteCheckoutAction(input: unknown): Promise<
     await assertSameOrigin();
     const data = parseInput(quoteCheckoutSchema, input);
     const owner = await getCartOwner({ create: false });
-    const summary = await getCheckoutSummary(owner, data.shippingMethodCode);
+    const summary = await getCheckoutSummary(owner, data.shippingMethodCode, data.postalCode);
 
     return success({
       subtotalMinor: summary.subtotalMinor,
