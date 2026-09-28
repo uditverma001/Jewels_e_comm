@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { MapPin, Truck, XCircle } from 'lucide-react';
 import { checkDeliveryAction } from '@/app/actions/delivery';
 import type { DeliveryResult } from '@/server/delivery/estimate';
@@ -15,27 +15,73 @@ import type { DeliveryResult } from '@/server/delivery/estimate';
  * The estimate comes back from the server already computed — no date maths
  * happens in the browser, because a promise computed against the customer's own
  * clock would still be a promise the shop has to keep.
+ *
+ * `madeToOrder` is passed in because engraving adds bench time before dispatch,
+ * and for a while this component did not know that: a customer engraving a ring
+ * was quoted a date computed as though it were coming off the shelf, while the
+ * confirmation email for the same order said seven to ten working days. The
+ * date shown here now moves when they ask for engraving.
  */
-export function DeliveryCheck() {
+export function DeliveryCheck({ madeToOrder = false }: { madeToOrder?: boolean }) {
   const [pincode, setPincode] = useState('');
   const [result, setResult] = useState<DeliveryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  /**
+   * What is currently quoted on screen, so a change of mind can be re-quoted
+   * without reading state inside an updater. Null whenever there is nothing
+   * worth re-asking for — no answer yet, or one that engraving cannot change.
+   */
+  const quoted = useRef<{ pincode: string; madeToOrder: boolean } | null>(null);
+
+  function run(code: string) {
+    startTransition(async () => {
+      const response = await checkDeliveryAction({ pincode: code, madeToOrder });
+      if (!response.ok) {
+        quoted.current = null;
+        setError(response.error);
+        return;
+      }
+      quoted.current = response.data.serviceable
+        ? { pincode: response.data.pincode, madeToOrder }
+        : null;
+      setResult(response.data);
+    });
+  }
+
   function check(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     setResult(null);
-
-    startTransition(async () => {
-      const response = await checkDeliveryAction({ pincode });
-      if (!response.ok) {
-        setError(response.error);
-        return;
-      }
-      setResult(response.data);
-    });
+    run(pincode);
   }
+
+  /*
+   * Re-quote when engraving is added or removed.
+   *
+   * Keyed on the boolean rather than on the engraving text, so this fires at
+   * most twice however much the customer types.
+   *
+   * The old date is cleared before the new one is asked for, rather than left
+   * up while the request is in flight. A stale date here is a specific, wrong
+   * promise that looks exactly like a correct one, and the whole point of this
+   * change is not to show one.
+   *
+   * An unserviceable answer is left alone: engraving does not make a PIN code
+   * deliverable, so re-asking would only replace the reason with itself.
+   */
+  useEffect(() => {
+    const current = quoted.current;
+    if (!current || current.madeToOrder === madeToOrder) return;
+
+    setResult(null);
+    run(current.pincode);
+    // Deliberately keyed on the flag alone. `run` is redeclared each render and
+    // what it needs is read from a ref, so tracking it would re-quote on every
+    // render instead of on a change of mind.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [madeToOrder]);
 
   return (
     <div className="border-ivory-300 border-b py-4">
@@ -105,8 +151,7 @@ export function DeliveryCheck() {
                 Arrives <strong className="font-medium">{formatWindow(result)}</strong>
               </p>
               <p className="mt-0.5 text-xs text-stone-500">
-                {result.zone} · dispatched {formatDate(result.dispatchOn)} · insured and
-                signature-on-delivery
+                {result.zone} · {formatDispatch(result)} · insured and signature-on-delivery
               </p>
             </div>
           </div>
@@ -124,6 +169,18 @@ function formatWindow(result: Extract<DeliveryResult, { serviceable: true }>): s
   const earliest = formatDate(result.earliest);
   const latest = formatDate(result.latest);
   return earliest === latest ? earliest : `${earliest} – ${latest}`;
+}
+
+/**
+ * When it leaves us.
+ *
+ * A made-to-order piece has a dispatch window rather than a dispatch day, and
+ * saying so is the point: it is the part of the wait the customer is choosing,
+ * and it is why the arrival date moved when they asked for engraving.
+ */
+function formatDispatch(result: Extract<DeliveryResult, { serviceable: true }>): string {
+  if (!result.madeToOrder) return `dispatched ${formatDate(result.dispatchOn)}`;
+  return `engraved by hand, so dispatched ${formatDate(result.dispatchOn)} – ${formatDate(result.dispatchBy)}`;
 }
 
 function formatDate(date: Date): string {

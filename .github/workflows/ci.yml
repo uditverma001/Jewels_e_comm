@@ -120,6 +120,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
 
+      # The seed imports `PrismaClient`, so the client has to exist before it
+      # runs. `pnpm build` generates it, but that is the step *after* this one,
+      # and this job had no generate step of its own — so the seed failed with
+      # "@prisma/client does not provide an export named 'PrismaClient'". Stated
+      # here as well as in `postinstall` so the job does not depend on lifecycle
+      # scripts having run.
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate
+
       - name: Prepare database
         run: |
           pnpm exec prisma migrate deploy

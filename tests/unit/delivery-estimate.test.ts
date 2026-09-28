@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateDelivery } from '@/server/delivery/estimate';
+import { estimateDelivery, MADE_TO_ORDER_DAYS_MIN } from '@/server/delivery/estimate';
 
 /**
  * Delivery estimates.
@@ -132,5 +132,76 @@ describe('the promised window', () => {
     const friday = new Date('2026-09-25T06:00:00Z');
     const result = estimateDelivery('440001', friday) as { earliest: Date };
     expect(dayName(result.earliest)).toBe('Monday');
+  });
+});
+
+describe('made-to-order bench time', () => {
+  /**
+   * The bug this covers: the engraving field said "adds 7–10 working days"
+   * and the delivery estimate directly beneath it quoted a date computed as
+   * though the piece were coming off the shelf. Two contradictory promises on
+   * one screen, on the one kind of piece that cannot be returned.
+   */
+  const MUMBAI = '400026';
+
+  function estimate(madeToOrder: boolean) {
+    const result = estimateDelivery(MUMBAI, WED_MORNING, { madeToOrder });
+    if (!result.serviceable) throw new Error('expected a serviceable estimate');
+    return result;
+  }
+
+  it('dispatches a stock piece on a single day, not a window', () => {
+    const stock = estimate(false);
+    expect(stock.madeToOrder).toBe(false);
+    expect(stock.dispatchBy).toEqual(stock.dispatchOn);
+  });
+
+  it('pushes dispatch out by the policy window when a piece must be made', () => {
+    const made = estimate(true);
+    const stock = estimate(false);
+
+    expect(made.madeToOrder).toBe(true);
+    expect(made.dispatchOn.getTime()).toBeGreaterThan(stock.dispatchOn.getTime());
+    expect(made.dispatchBy.getTime()).toBeGreaterThan(made.dispatchOn.getTime());
+  });
+
+  it('counts the bench time in working days, skipping Sundays', () => {
+    const made = estimate(true);
+    const stock = estimate(false);
+
+    // Seven working days from a Wednesday spans one Sunday, so nine calendar
+    // days — which is the whole reason this is not `+ 7 * DAY`.
+    const calendarDays = Math.round(
+      (made.dispatchOn.getTime() - stock.dispatchOn.getTime()) / 86_400_000,
+    );
+    expect(calendarDays).toBe(MADE_TO_ORDER_DAYS_MIN + 1);
+    expect(dayName(made.dispatchOn)).not.toBe('Sunday');
+    expect(dayName(made.dispatchBy)).not.toBe('Sunday');
+  });
+
+  it('moves the arrival window, not only the dispatch date', () => {
+    const made = estimate(true);
+    const stock = estimate(false);
+
+    expect(made.earliest.getTime()).toBeGreaterThan(stock.earliest.getTime());
+    expect(made.latest.getTime()).toBeGreaterThan(stock.latest.getTime());
+  });
+
+  it('compounds the slowest bench time with the slowest transit', () => {
+    // The outer bound has to be reachable by adding the two worst cases, or a
+    // date could be missed with nothing having gone wrong.
+    const made = estimate(true);
+    expect(made.latest.getTime()).toBeGreaterThanOrEqual(made.dispatchBy.getTime());
+
+    const transitDays = Math.round(
+      (made.latest.getTime() - made.dispatchBy.getTime()) / 86_400_000,
+    );
+    expect(transitDays).toBeGreaterThanOrEqual(made.maxDays);
+  });
+
+  it('treats an absent flag as a stock piece', () => {
+    const omitted = estimateDelivery(MUMBAI, WED_MORNING);
+    const explicit = estimateDelivery(MUMBAI, WED_MORNING, { madeToOrder: false });
+    expect(omitted).toEqual(explicit);
   });
 });

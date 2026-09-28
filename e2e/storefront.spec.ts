@@ -279,3 +279,32 @@ test('a piece that is not engravable offers no engraving field', async ({ page }
   await page.goto('/products/anaya-diamond-stud');
   await expect(page.locator('#engraving-text')).toHaveCount(0);
 });
+
+test('asking for engraving moves the delivery date it had already quoted', async ({ page }) => {
+  // The bug: the engraving box said "adds 7–10 working days" and the delivery
+  // estimate directly below it quoted a date computed as though the piece were
+  // coming off the shelf. Two contradictory promises on one screen, on the one
+  // kind of piece that cannot be returned.
+  await page.goto('/products/ravi-signet-ring');
+
+  await page.fill('#delivery-pincode', '400001');
+  await page.getByRole('button', { name: /^check$/i }).click();
+
+  const estimate = page.getByText(/dispatched/i);
+  await expect(estimate).toBeVisible({ timeout: 15_000 });
+  const offTheShelf = await estimate.textContent();
+
+  // Ask for engraving. The quote already on screen is now wrong, and has to
+  // answer for itself without the customer pressing Check again.
+  await page.fill('#engraving-text', 'A & R');
+
+  await expect(page.getByText(/engraved by hand, so dispatched/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(estimate).not.toHaveText(offTheShelf ?? '');
+
+  // And removing it puts the shelf date back, rather than leaving the customer
+  // with a fortnight they are no longer waiting.
+  await page.fill('#engraving-text', '');
+  await expect(page.getByText(/engraved by hand/i)).toBeHidden({ timeout: 15_000 });
+});

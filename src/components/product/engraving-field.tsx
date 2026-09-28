@@ -1,6 +1,7 @@
 'use client';
 
 import { PenLine } from 'lucide-react';
+import { MADE_TO_ORDER_DAYS_MAX, MADE_TO_ORDER_DAYS_MIN } from '@/server/delivery/estimate';
 
 /**
  * Engraving.
@@ -53,7 +54,8 @@ export function EngravingField({
           {remaining} character{remaining === 1 ? '' : 's'} left
         </span>
         {' · '}
-        Hand cut, included in the price, and adds 7–10 working days.{' '}
+        Hand cut, included in the price, and adds {MADE_TO_ORDER_DAYS_MIN}–{MADE_TO_ORDER_DAYS_MAX}{' '}
+        working days.{' '}
         {value.trim().length > 0 ? (
           // Stated only once there is something to engrave — a warning shown
           // to everyone is a warning nobody reads.

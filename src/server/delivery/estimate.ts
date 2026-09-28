@@ -24,8 +24,16 @@ export interface DeliveryEstimate {
   /** Business days in transit, after dispatch. */
   minDays: number;
   maxDays: number;
-  /** When the piece leaves us. */
+  /** The earliest the piece leaves us. */
   dispatchOn: Date;
+  /**
+   * The latest it leaves us. Equal to `dispatchOn` for a piece held in stock,
+   * and later for one that has to be engraved or made, where the bench time is
+   * itself a range.
+   */
+  dispatchBy: Date;
+  /** True when bench time was added, so a renderer can say why the wait. */
+  madeToOrder: boolean;
   /** The window we are prepared to promise. */
   earliest: Date;
   latest: Date;
@@ -82,12 +90,42 @@ const METRO_DISTRICTS: Record<string, { name: string; minDays: number; maxDays: 
  */
 const DISPATCH_CUTOFF_HOUR_IST = 14;
 
+/**
+ * Bench time for a piece that has to be engraved, resized or made.
+ *
+ * From the shipping policy: "Pieces that are engraved, resized or made to order
+ * add seven to ten working days before dispatch." It lives here because two
+ * places quote it — the product page's estimate and the confirmation email —
+ * and for a while only the email knew. The product page quoted a date computed
+ * with no bench time at all, so a customer engraving a ring was shown a
+ * delivery date a fortnight early, on the one kind of piece that cannot be
+ * returned.
+ */
+export const MADE_TO_ORDER_DAYS_MIN = 7;
+export const MADE_TO_ORDER_DAYS_MAX = 10;
+
 /** India Post and the private couriers both work Monday to Saturday. */
 const WEEKLY_CLOSED_DAY = 0; // Sunday
 
 const PINCODE_PATTERN = /^[1-8]\d{5}$/;
 
-export function estimateDelivery(rawPincode: string, now: Date = new Date()): DeliveryResult {
+/**
+ * What the customer is having made, as far as it changes the date.
+ *
+ * `madeToOrder` comes from the browser on the product page, which is fine
+ * there: it is the customer's own choice, it changes no price, and claiming it
+ * can only make the quoted date later. Anywhere the date is authoritative — the
+ * confirmation email — it is derived from the order's own items instead.
+ */
+export interface PieceOptions {
+  madeToOrder?: boolean;
+}
+
+export function estimateDelivery(
+  rawPincode: string,
+  now: Date = new Date(),
+  piece: PieceOptions = {},
+): DeliveryResult {
   const pincode = rawPincode.replace(/\s+/g, '');
 
   if (!/^\d{6}$/.test(pincode)) {
@@ -129,7 +167,13 @@ export function estimateDelivery(rawPincode: string, now: Date = new Date()): De
     };
   }
 
-  const dispatchOn = nextDispatchDay(now);
+  const readyOn = nextDispatchDay(now);
+  const madeToOrder = piece.madeToOrder === true;
+
+  // Bench time lands before dispatch, so it shifts both ends of the dispatch
+  // window and everything downstream of it.
+  const dispatchOn = madeToOrder ? addBusinessDays(readyOn, MADE_TO_ORDER_DAYS_MIN) : readyOn;
+  const dispatchBy = madeToOrder ? addBusinessDays(readyOn, MADE_TO_ORDER_DAYS_MAX) : readyOn;
 
   return {
     serviceable: true,
@@ -138,8 +182,13 @@ export function estimateDelivery(rawPincode: string, now: Date = new Date()): De
     minDays: zone.minDays,
     maxDays: zone.maxDays,
     dispatchOn,
+    dispatchBy,
+    madeToOrder,
     earliest: addBusinessDays(dispatchOn, zone.minDays),
-    latest: addBusinessDays(dispatchOn, zone.maxDays),
+    // The slowest bench time followed by the slowest transit. Compounding the
+    // two is the honest outer bound; taking the worst of them separately would
+    // quote a date we could miss without anything going wrong.
+    latest: addBusinessDays(dispatchBy, zone.maxDays),
   };
 }
 

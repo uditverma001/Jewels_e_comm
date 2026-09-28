@@ -385,7 +385,7 @@ export function PurchasePanel({
        * Below the buy buttons, not above them: the customer decides they want
        * the piece first, and the date is what turns "want" into "by Thursday".
        */}
-      <DeliveryCheck />
+      <DeliveryCheck madeToOrder={engraving.trim().length > 0} />
 
       {selectedVariant ? (
         <p className="text-xs text-stone-500">

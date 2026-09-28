@@ -1,5 +1,6 @@
 import { publicEnv } from '@/env';
 import { formatMinor } from '@/server/money';
+import { MADE_TO_ORDER_DAYS_MAX, MADE_TO_ORDER_DAYS_MIN } from '@/server/delivery/estimate';
 import type { EmailMessage } from './types';
 
 /**
@@ -137,9 +138,14 @@ export function orderConfirmationEmail(params: {
    * owes. Stated as a window rather than a date because dispatch is what we
    * control; the courier's leg is quoted on the product page against a PIN
    * code.
+   *
+   * The number of days comes from `server/delivery`, which is also what the
+   * product page's estimate adds. It was spelled out here once and the product
+   * page's estimate did not add it at all, so the same order was quoted a date
+   * on one screen and a fortnight of bench time on the other.
    */
   const dispatchNote = hasEngraving
-    ? '<p style="color:#6d655c;font-size:13px">One or more pieces are being engraved by hand, so this order dispatches in <strong>7–10 working days</strong> rather than the usual two. Engraved pieces cannot be returned.</p>'
+    ? `<p style="color:#6d655c;font-size:13px">One or more pieces are being engraved by hand, so this order dispatches in <strong>${MADE_TO_ORDER_DAYS_MIN}–${MADE_TO_ORDER_DAYS_MAX} working days</strong> rather than the usual two. Engraved pieces cannot be returned.</p>`
     : '<p style="color:#6d655c;font-size:13px">We dispatch within two working days, insured and signature-on-delivery.</p>';
 
   const giftNote = params.giftWrap
