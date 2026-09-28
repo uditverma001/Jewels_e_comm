@@ -308,3 +308,30 @@ test('asking for engraving moves the delivery date it had already quoted', async
   await page.fill('#engraving-text', '');
   await expect(page.getByText(/engraved by hand/i)).toBeHidden({ timeout: 15_000 });
 });
+
+test('the newsletter asks for confirmation, and the unsubscribe page stands on its own', async ({
+  page,
+}) => {
+  // The footer form has always said "please check your inbox" on success. Until
+  // the subscription was made to need confirming, there was nothing to check for.
+  await page.goto('/');
+
+  const email = `e2e-news-${Date.now()}@example.test`;
+  await page.locator('#newsletter-email').first().fill(email);
+  await page
+    .getByRole('button', { name: /^sign up$/i })
+    .first()
+    .click();
+
+  await expect(page.getByText(/check your inbox/i)).toBeVisible({ timeout: 15_000 });
+
+  // The page the privacy policy promises. Reached without a token it must still
+  // be useful rather than an error, because somebody will arrive here by hand.
+  await page.goto('/unsubscribe');
+  await expect(page.getByRole('heading', { name: /leave the letter/i })).toBeVisible();
+  await expect(page.getByRole('link', { name: /customer care/i })).toBeVisible();
+
+  // And it must never unsubscribe anybody just for loading: no button, no token,
+  // nothing done.
+  await expect(page.getByRole('button', { name: /unsubscribe/i })).toHaveCount(0);
+});

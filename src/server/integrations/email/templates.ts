@@ -21,7 +21,14 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function layout(heading: string, bodyHtml: string): string {
+/**
+ * The line under the card, explaining why this arrived.
+ *
+ * Overridable because the default is a transactional justification — an account
+ * or an order — and it is not true of a newsletter confirmation, where neither
+ * exists and the honest answer is an unsubscribe link.
+ */
+function layout(heading: string, bodyHtml: string, footerHtml?: string): string {
   return `<!doctype html>
 <html><body style="margin:0;padding:0;background:#faf8f5;font-family:Georgia,'Times New Roman',serif;color:#2a2622">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px">
@@ -34,7 +41,10 @@ function layout(heading: string, bodyHtml: string): string {
         <tr><td style="padding:16px 32px 32px;font-size:15px;line-height:1.6;font-family:Helvetica,Arial,sans-serif">${bodyHtml}</td></tr>
       </table>
       <p style="max-width:560px;margin:16px auto 0;font-size:12px;color:#9a9086;font-family:Helvetica,Arial,sans-serif">
-        You are receiving this because an account or order exists at ${escapeHtml(publicEnv.appUrl)}.
+        ${
+          footerHtml ??
+          `You are receiving this because an account or order exists at ${escapeHtml(publicEnv.appUrl)}.`
+        }
       </p>
     </td></tr>
   </table>
@@ -234,5 +244,35 @@ export function backInStockEmail(params: {
     subject: `${piece} is back in stock`,
     html: layout('Back in stock', body),
     text: `${piece} is available again.\n\n${params.productUrl}\n\nWe hold nothing in reserve, so it is first come, first served.`,
+  };
+}
+
+/**
+ * Confirm a newsletter subscription.
+ *
+ * Nothing counts as a subscriber until this is clicked, because anybody can type
+ * anybody's address into a footer form. That makes this the one email the list
+ * can send to an unconfirmed address — so it carries an unsubscribe link of its
+ * own, for somebody who did not ask for it and wants to be sure they are left
+ * alone.
+ */
+export function newsletterConfirmationEmail(params: {
+  to: string;
+  confirmUrl: string;
+  unsubscribeUrl: string;
+}): EmailMessage {
+  const body = `
+    <p>Somebody — we hope you — asked for the ${escapeHtml(publicEnv.storeName)} letter at this address.</p>
+    <p>We send it rarely: new pieces, and the occasional note about how something was made. Confirm below and you are on the list.</p>
+    ${button(params.confirmUrl, 'Confirm subscription')}
+    <p style="color:#6d655c;font-size:13px">If it was not you, do nothing at all. Without that confirmation we will not add you, and you will not hear from us again.</p>`;
+
+  const footer = `Sent because this address was entered at ${escapeHtml(publicEnv.appUrl)}. <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#9a9086">Never contact this address</a>.`;
+
+  return {
+    to: params.to,
+    subject: `Confirm your ${publicEnv.storeName} subscription`,
+    html: layout('One more step', body, footer),
+    text: `Somebody asked for the ${publicEnv.storeName} letter at this address.\n\nConfirm: ${params.confirmUrl}\n\nIf it was not you, do nothing — without confirmation we will not add you.\n\nNever contact this address: ${params.unsubscribeUrl}`,
   };
 }
