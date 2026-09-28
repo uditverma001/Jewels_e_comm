@@ -7,6 +7,7 @@ import { releaseRedemption } from '@/server/coupons/service';
 import { sendEmailSafely } from '@/server/integrations/email';
 import { orderStatusEmail } from '@/server/integrations/email/templates';
 import { orderUrlFor } from './links';
+import { returnEligibility } from './returns';
 import { getPaymentProvider } from '@/server/integrations/payments';
 import {
   canTransitionOrder,
@@ -290,9 +291,20 @@ export async function requestReturn(params: {
 }): Promise<void> {
   const order = await db.order.findFirst({
     where: { id: params.orderId, userId: params.userId },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      items: { select: { productName: true, engravingText: true } },
+      shipments: { select: { deliveredAt: true } },
+    },
   });
   if (!order) throw notFound('We could not find that order.');
+
+  // The same verdict the account page rendered its button from. Checked again
+  // here because the page is presentation: a stale tab, or a request made
+  // without one, must not get a return the policy does not allow.
+  const eligibility = returnEligibility(order, new Date());
+  if (!eligibility.eligible) throw conflict(eligibility.message);
 
   if (!canTransitionOrder(order.status, 'RETURN_REQUESTED')) {
     throw conflict('This order is not eligible for a return.');

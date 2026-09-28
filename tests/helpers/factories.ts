@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hash } from '@node-rs/argon2';
 import type { Prisma } from '@prisma/client';
 import { testDb as db } from './db';
+import { engravingKeyFor } from '@/server/cart/service';
 
 /**
  * Fixture builders.
@@ -131,7 +132,12 @@ export async function createCoupon(overrides: Partial<Prisma.CouponCreateInput> 
 export async function createCart(params: {
   userId?: string;
   anonymousId?: string;
-  items?: { variantId: string; quantity: number; addedUnitPriceMinor: number }[];
+  items?: {
+    variantId: string;
+    quantity: number;
+    addedUnitPriceMinor: number;
+    engravingText?: string | null;
+  }[];
   couponCode?: string;
 }) {
   return db.cart.create({
@@ -140,7 +146,23 @@ export async function createCart(params: {
       anonymousId: params.anonymousId ?? null,
       couponCode: params.couponCode ?? null,
       expiresAt: new Date(Date.now() + 86_400_000),
-      items: params.items ? { create: params.items } : undefined,
+      items: params.items
+        ? {
+            // `engravingKey` is derived, never passed in: a CHECK constraint
+            // ties it to the text, and a fixture that sets one without the
+            // other fails in the database rather than in the assertion.
+            create: params.items.map((item) => {
+              const engravingText = item.engravingText ?? null;
+              return {
+                variantId: item.variantId,
+                quantity: item.quantity,
+                addedUnitPriceMinor: item.addedUnitPriceMinor,
+                engravingText,
+                engravingKey: engravingKeyFor(engravingText),
+              };
+            }),
+          }
+        : undefined,
     },
     include: { items: true },
   });

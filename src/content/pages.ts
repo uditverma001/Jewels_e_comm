@@ -259,7 +259,8 @@ export const LEGAL_PAGES: ContentPage[] = [
       {
         heading: 'Cookies',
         body: [
-          'We use a cookie to keep you signed in, a cookie to remember your bag, and a short-lived cookie during checkout. We do not use advertising or cross-site tracking cookies.',
+          'We use a cookie to keep you signed in, a cookie to remember your bag, a short-lived one during checkout, and — if you look up an order placed without an account — one that remembers which orders this browser has already unlocked, for a month. That is all of them.',
+          'Every one of them is set by us, is readable only by our server rather than by anything running in the page, and is not sent with requests that other sites make on your behalf. We do not use advertising or cross-site tracking cookies.',
         ],
       },
     ],

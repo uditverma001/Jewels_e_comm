@@ -384,8 +384,12 @@ async function resolveShipping(code: string | null): Promise<ShippingQuote | nul
  * two plain lines of the same variant would both be permitted. Collapsing
  * absent to '' is what makes the index work, and a CHECK constraint keeps the
  * two columns in lockstep so this can never be forgotten at a call site.
+ *
+ * Exported so that anything else writing a `CartItem` — a test fixture, a
+ * future importer — derives the key the same way rather than reimplementing
+ * `?? ''` and discovering the CHECK constraint at runtime.
  */
-function engravingKeyFor(text: string | null): string {
+export function engravingKeyFor(text: string | null): string {
   return text ?? '';
 }
 

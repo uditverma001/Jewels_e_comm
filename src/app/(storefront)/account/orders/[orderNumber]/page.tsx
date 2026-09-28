@@ -10,6 +10,7 @@ import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
 } from '@/server/orders/state-machine';
+import { returnEligibility } from '@/server/orders/returns';
 import { formatMinor } from '@/server/money';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { buildMetadata } from '@/lib/seo';
@@ -233,7 +234,10 @@ export default async function OrderDetailPage({
       <OrderActions
         orderId={order.id}
         canCancel={isCustomerCancellable(order.status)}
-        canRequestReturn={order.status === 'DELIVERED' || order.status === 'SHIPPED'}
+        // The page renders the verdict; the action re-checks it. Whether a
+        // return is allowed is a policy question, so it is answered once in
+        // `returnEligibility` rather than as a status comparison here.
+        returnVerdict={returnEligibility(order, new Date())}
       />
 
       <section aria-labelledby="history">
