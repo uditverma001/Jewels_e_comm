@@ -113,3 +113,15 @@ matching declaration in `schema.prisma` or it will try to drop it.
   test that changes data must put it back.
 
 Run `pnpm check` before you push.
+
+- **A green local run is not a green build.** Check that CI actually executed
+  the steps, not just that nothing red appeared: this workflow failed at
+  `pnpm/action-setup` for its entire life because no pnpm version was pinned,
+  so every push reported a failure that had run no test at all. The pin now
+  lives in `package.json#packageManager` — one source of truth, which the action
+  reads — and it must not be removed.
+- To find out what CI would say without a round trip per step, run the
+  workflow's own steps locally with the workflow's own environment, against a
+  **freshly created database**. CI always starts from an empty one, so a
+  migration that only works because the local database already has the schema
+  passes locally and fails there.
