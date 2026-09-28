@@ -20,6 +20,21 @@ const serverSchema = z
 
     APP_URL: z.string().url(),
     /**
+     * The same URL again, for the browser.
+     *
+     * `APP_URL` is server-only, and the client bundle, the SEO metadata and the
+     * email footers all need the site's own address — so it has to travel as a
+     * `NEXT_PUBLIC_` variable too. Two transports for one fact, which is why the
+     * refinement below insists they agree.
+     *
+     * Required here because `publicEnv` falls back to `http://localhost:3000`
+     * when it is missing. That fallback feeds `metadataBase`, so every canonical
+     * URL, Open Graph tag and sitemap entry in a deployment that forgot to set
+     * it resolves against localhost — silently, and exactly where a search
+     * engine is the one reading.
+     */
+    NEXT_PUBLIC_APP_URL: z.string().url(),
+    /**
      * Extra hostnames this deployment legitimately answers to, comma
      * separated (e.g. "https://staging.example.com,https://www.example.com").
      * Consulted by the CSRF origin check; leave empty for a single domain.
@@ -88,6 +103,16 @@ const serverSchema = z
   // first person it inconvenienced. A deployment answering on localhost is not
   // a production deployment.
   .superRefine((cfg, ctx) => {
+    // Checked in every environment, not only production: the two disagreeing
+    // is a mistake anywhere, and finding it locally is the cheap way.
+    if (originOf(cfg.APP_URL) !== originOf(cfg.NEXT_PUBLIC_APP_URL)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEXT_PUBLIC_APP_URL'],
+        message: `NEXT_PUBLIC_APP_URL (${cfg.NEXT_PUBLIC_APP_URL}) must be the same origin as APP_URL (${cfg.APP_URL}) — they are one address, and links built from the wrong one go somewhere nobody is`,
+      });
+    }
+
     if (cfg.NODE_ENV !== 'production') return;
     if (isLocalOrigin(cfg.APP_URL)) return;
 
@@ -171,6 +196,17 @@ const serverSchema = z
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 
+/** Origin only, so a trailing slash or a path is not a disagreement. */
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin.toLowerCase();
+  } catch {
+    // `z.string().url()` has already rejected anything unparseable; returning
+    // the raw value keeps the comparison honest if that ever changes.
+    return url.toLowerCase();
+  }
+}
+
 function isLocalOrigin(appUrl: string): boolean {
   try {
     return LOCAL_HOSTS.has(new URL(appUrl).hostname);
@@ -208,7 +244,15 @@ export const env: ServerEnv = new Proxy({} as ServerEnv, {
   },
 });
 
-/** Safe to import anywhere, including client components. */
+/**
+ * Safe to import anywhere, including client components.
+ *
+ * The fallbacks are a last resort rather than the guarantee. `NEXT_PUBLIC_APP_URL`
+ * is required by the server schema and checked against `APP_URL`, so a
+ * deployment missing it does not boot and a build without it does not finish —
+ * which is the point, because the fallback silently pointed every canonical URL
+ * and email footer at localhost.
+ */
 export const publicEnv = {
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
   storeName: process.env.NEXT_PUBLIC_STORE_NAME ?? 'Aurelia',
