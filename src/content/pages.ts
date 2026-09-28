@@ -240,7 +240,8 @@ export const LEGAL_PAGES: ContentPage[] = [
       {
         heading: 'Payment details',
         body: [
-          'We never see or store your card details. Payments are handled by Razorpay, which is PCI-DSS compliant; we receive only a payment reference, the amount, and whether it succeeded.',
+          'We never see or store your card details — no card number, no expiry, not even the last four digits. Payments are handled by Razorpay, which is PCI-DSS compliant.',
+          'What reaches us is the payment reference, the amount, whether it succeeded, which kind of instrument was used — card, UPI or net banking, but nothing identifying it — and, where a payment failed, the reason the provider gave. That is the whole of it.',
         ],
       },
       {
